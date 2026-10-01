@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dynamic Character Network Map</title>
+  <title>StoryGraph Studio</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vis-Network CDN -->
@@ -59,6 +59,9 @@
         <span>Relationships: <strong id="stat-relationships" class="text-slate-800">0</strong></span>
       </div>
       <div class="flex items-center gap-2">
+        <button id="btn-open-json-modal" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition-colors border border-slate-300">
+          <i data-lucide="code" class="w-3.5 h-3.5"></i> JSON Input / Edit
+        </button>
         <button id="btn-export-json" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg transition-colors border border-slate-300">
           <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
         </button>
@@ -119,7 +122,7 @@
       <!-- Sidebar Body (Scrollable) -->
       <div class="flex-1 overflow-y-auto p-5 space-y-6">
 
-        <!-- Empty State (When no node is selected) -->
+        <!-- Empty State -->
         <div id="inspector-empty-state" class="text-center py-12 px-4">
           <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
             <i data-lucide="mouse-pointer-click" class="w-6 h-6"></i>
@@ -132,7 +135,7 @@
             <ul class="text-xs text-slate-500 space-y-2">
               <li class="flex items-start gap-2">
                 <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5"></i>
-                <span>Drag nodes around to organize your map layout.</span>
+                <span>Drag nodes around to organise your map layout.</span>
               </li>
               <li class="flex items-start gap-2">
                 <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5"></i>
@@ -142,27 +145,23 @@
           </div>
         </div>
 
-        <!-- Active Character Details (Hidden by default) -->
+        <!-- Active Character Details -->
         <div id="inspector-content" class="space-y-6 hidden">
-          <!-- Profile Header Card -->
           <div class="flex items-start gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <img id="inspector-avatar" src="" alt="Avatar" class="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md bg-slate-200 shrink-0">
             <div class="flex-1 min-w-0">
               <span id="inspector-archetype" class="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider rounded-md mb-1">Role</span>
               <h3 id="inspector-name" class="font-bold text-base text-slate-900 truncate">Character Name</h3>
-              <p id="inspector-description" class="text-xs text-slate-600 mt-1 line-clamp-3">Description or bio goes here...</p>
+              <p id="inspector-description" class="text-xs text-slate-600 mt-1 line-clamp-3">Description...</p>
             </div>
           </div>
 
-          <!-- Connected Relationships Section -->
           <div>
             <div class="flex items-center justify-between mb-3">
               <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Connected Relationships</h4>
               <span id="inspector-rel-count" class="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full">0</span>
             </div>
-            <div id="inspector-relationships-list" class="space-y-2 max-h-40 overflow-y-auto pr-1">
-              <!-- Dynamically populated relationships -->
-            </div>
+            <div id="inspector-relationships-list" class="space-y-2 max-h-40 overflow-y-auto pr-1"></div>
           </div>
 
           <!-- Add Relationship Sub-Form -->
@@ -201,7 +200,7 @@
           </div>
         </div>
 
-        <!-- Character Editor / Creator Form -->
+        <!-- Character Editor Form -->
         <div class="border-t border-slate-200 pt-6">
           <div class="flex items-center justify-between mb-4">
             <h4 id="form-title" class="text-xs font-bold text-slate-800 uppercase tracking-wider">Add New Character</h4>
@@ -248,7 +247,7 @@
 
             <div>
               <label class="block text-[11px] font-semibold text-slate-600 mb-1">Bio / Description</label>
-              <textarea id="input-char-bio" rows="2" placeholder="Brief background or role in the story..." class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-xs rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+              <textarea id="input-char-bio" rows="2" placeholder="Brief background..." class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-xs rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
             </div>
 
             <div class="flex items-center gap-2 pt-2">
@@ -267,12 +266,34 @@
 
   </div>
 
-  <!-- Initialize Lucide Icons & Application Logic -->
+  <!-- JSON INPUT / EDIT MODAL -->
+  <div id="json-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col border border-slate-200 m-4">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div class="flex items-center gap-2">
+          <i data-lucide="code" class="w-5 h-5 text-indigo-600"></i>
+          <h3 class="font-bold text-sm text-slate-900">Map JSON Input & Editor</h3>
+        </div>
+        <button id="btn-close-json-modal" class="p-1 text-slate-400 hover:text-slate-700 rounded-lg transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="p-6 space-y-4">
+        <p class="text-xs text-slate-600">Paste or edit the complete JSON structure for the current book map below, then click <strong>Apply JSON</strong> to update the network instantly.</p>
+        <textarea id="textarea-json-input" rows="12" class="w-full font-mono text-xs bg-slate-900 text-slate-100 p-4 rounded-xl border border-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+      </div>
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
+        <button id="btn-cancel-json" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-100 transition-colors">Cancel</button>
+        <button id="btn-apply-json" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors shadow-xs">Apply JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP SCRIPT -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       lucide.createIcons();
 
-      // --- STATE MANAGEMENT ---
       let maps = JSON.parse(localStorage.getItem('storygraph_maps')) || {};
       let activeMapId = localStorage.getItem('storygraph_active_map') || null;
 
@@ -303,12 +324,18 @@
       let selectedNodeId = null;
       let lineSpacingValue = 250;
 
-      // DOM Elements
       const selectActiveMap = document.getElementById('select-active-map');
       const btnNewMap = document.getElementById('btn-new-map');
       const btnRenameMap = document.getElementById('btn-rename-map');
       const btnDeleteMap = document.getElementById('btn-delete-map');
+      const btnOpenJsonModal = document.getElementById('btn-open-json-modal');
       const btnExportJson = document.getElementById('btn-export-json');
+
+      const jsonModal = document.getElementById('json-modal');
+      const btnCloseJsonModal = document.getElementById('btn-close-json-modal');
+      const btnCancelJson = document.getElementById('btn-cancel-json');
+      const btnApplyJson = document.getElementById('btn-apply-json');
+      const textareaJsonInput = document.getElementById('textarea-json-input');
 
       const statCharacters = document.getElementById('stat-characters');
       const statRelationships = document.getElementById('stat-relationships');
@@ -319,7 +346,6 @@
       const btnResetView = document.getElementById('btn-reset-view');
       const legendList = document.getElementById('legend-list');
 
-      // Inspector Elements
       const inspectorEmptyState = document.getElementById('inspector-empty-state');
       const inspectorContent = document.getElementById('inspector-content');
       const btnClearSelection = document.getElementById('btn-clear-selection');
@@ -330,13 +356,11 @@
       const inspectorRelCount = document.getElementById('inspector-rel-count');
       const inspectorRelationshipsList = document.getElementById('inspector-relationships-list');
       
-      // Relationship Form
       const formRelationship = document.getElementById('form-relationship');
       const selectTargetCharacter = document.getElementById('select-target-character');
       const selectRelType = document.getElementById('select-rel-type');
       const inputRelLabel = document.getElementById('input-rel-label');
 
-      // Character Editor Form
       const formCharacter = document.getElementById('form-character');
       const formTitle = document.getElementById('form-title');
       const btnModeToggle = document.getElementById('btn-mode-toggle');
@@ -616,7 +640,7 @@
           maps[newId] = {
             title: title.trim(),
             nodes: [
-              { id: 'char-1', label: 'Protagonist', shortName: 'Hero', role: 'Protagonist', fontSize: 16, avatar: '', bio: 'Main character of the story.' }
+              { id: 'char-1', label: 'Protagonist', shortName: 'Hero', role: 'Protagonist', fontSize: 16, avatar: '', bio: 'Main character.' }
             ],
             edges: []
           };
@@ -665,6 +689,39 @@
           updateStats();
           renderLegend();
           resetInspector();
+        });
+
+        // JSON Modal Open / Close / Apply
+        btnOpenJsonModal.addEventListener('click', () => {
+          const currentMap = getCurrentMap();
+          textareaJsonInput.value = JSON.stringify(currentMap, null, 2);
+          jsonModal.classList.remove('hidden');
+        });
+
+        const closeJson = () => jsonModal.classList.add('hidden');
+        btnCloseJsonModal.addEventListener('click', closeJson);
+        btnCancelJson.addEventListener('click', closeJson);
+
+        btnApplyJson.addEventListener('click', () => {
+          try {
+            const parsed = JSON.parse(textareaJsonInput.value);
+            if (!parsed.nodes || !Array.isArray(parsed.nodes) || !parsed.edges || !Array.isArray(parsed.edges)) {
+              throw new Error('Invalid JSON structure: Must contain "nodes" and "edges" arrays.');
+            }
+            maps[activeMapId] = parsed;
+            if (parsed.title) {
+              maps[activeMapId].title = parsed.title;
+            }
+            saveToLocalStorage();
+            populateMapSelector();
+            renderNetwork();
+            updateStats();
+            renderLegend();
+            resetInspector();
+            closeJson();
+          } catch (err) {
+            alert('JSON Parsing Error: ' + err.message);
+          }
         });
 
         btnExportJson.addEventListener('click', () => {
