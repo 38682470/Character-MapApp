@@ -1,7 +1,7 @@
 /**
  * DYNAMIC CHARACTER NETWORK MAP - COMPLETE APPLICATION LOGIC
  * Features: Multi-Map Manager, Physics Spacing, Drag-and-Drop Image Conversion, 
- * Auto-Wrapping SVGs with Bottom-Banner Photo Text Overlay, JSON Import/Export, Forms, LocalStorage.
+ * Transparent Lower-Third Text Outlines, JSON Modal Import/Export, Forms, LocalStorage.
  */
 
 // --- GLOBAL STATE & CONFIGURATION ---
@@ -34,7 +34,7 @@ const DEFAULT_RELATIONSHIPS = [
   { id: 'e1', from: '1', to: '2', label: 'Rival/Enemy', type: 'Rival/Enemy', color: { color: REL_COLORS['Rival/Enemy'] } }
 ];
 
-// --- DYNAMIC SVG GENERATOR (Photo with Bottom-Third Text Banner) ---
+// --- DYNAMIC SVG GENERATOR (Transparent Lower-Third Outlined Text) ---
 function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6366f1', avatarUrl = '') {
   const displayText = (shortName || name).trim();
   const hasPhoto = avatarUrl && avatarUrl.trim() !== '' && !avatarUrl.startsWith('data:image/svg');
@@ -43,7 +43,7 @@ function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6
   let textElement = '';
 
   if (hasPhoto) {
-    // Photo present: Position text safely inside the dark bottom banner (approx y: 72 to 92)
+    // Photo present: Position text in the lower third with 100% transparent background and crisp stroke outline
     if (displayText.length > 9 && displayText.includes(' ')) {
       const words = displayText.split(' ');
       const mid = Math.ceil(words.length / 2);
@@ -51,11 +51,11 @@ function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6
       const line2 = words.slice(mid).join(' ');
 
       textElement = `
-        <text x="50" y="73" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.75}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line1}</text>
-        <text x="50" y="89" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.75}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line2}</text>
+        <text x="50" y="73" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.75}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3.5" paint-order="stroke fill">${line1}</text>
+        <text x="50" y="89" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.75}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3.5" paint-order="stroke fill">${line2}</text>
       `;
     } else {
-      textElement = `<text x="50" y="81" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.9}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${displayText}</text>`;
+      textElement = `<text x="50" y="82" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.9}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3.5" paint-order="stroke fill">${displayText}</text>`;
     }
 
     visualContent = `
@@ -66,8 +66,6 @@ function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6
       </defs>
       <circle cx="50" cy="50" r="48" fill="${color}" />
       <image href="${avatarUrl}" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice" clip-path="url(#circleClip)" />
-      <!-- Dark bottom banner gradient for crystal-clear name readability -->
-      <path d="M 2 62 Q 50 58 98 62 L 98 96 A 48 48 0 0 1 2 96 Z" fill="rgba(0, 0, 0, 0.78)" clip-path="url(#circleClip)" />
     `;
   } else {
     // Standard centered text for nodes without photos
@@ -129,6 +127,17 @@ function initNetworkEngine() {
   network.on('click', handleNodeClick);
   network.on('deselectNode', handleDeselect);
   renderLegend();
+
+  // Restore line spacing slider event listener
+  const spacingSlider = document.getElementById('slider-line-spacing');
+  if (spacingSlider) {
+    spacingSlider.addEventListener('input', (e) => {
+      const spacing = parseInt(e.target.value, 10);
+      if (!isNaN(spacing)) {
+        network.setOptions({ physics: { forceAtlas2Based: { springLength: spacing } } });
+      }
+    });
+  }
 }
 
 // --- NODE CENTERING & HIGHLIGHTING ENGINE ---
@@ -233,7 +242,6 @@ function loadMapData(mapId) {
     edges = parsed.edges || [];
   }
 
-  // Ensure fresh dynamic SVGs are rendered with bottom banner on load
   nodes = nodes.map(n => {
     n.fontSize = n.fontSize || 26;
     n.image = createDynamicAvatarSVG(n.label, n.shortName, n.fontSize, n.color?.border || '#6366f1', n.rawAvatar || n.image);
@@ -448,6 +456,68 @@ function processFileToBase64(file) {
   reader.readAsDataURL(file);
 }
 
+// --- JSON IMPORT MODAL HELPER ---
+function openJsonImportModal() {
+  // Check if a modal already exists, create if not
+  let modal = document.getElementById('json-import-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'json-import-modal';
+    modal.className = 'fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4';
+    modal.innerHTML = `
+      <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 flex flex-col gap-4">
+        <h3 class="text-lg font-bold text-slate-800">Import Map JSON Backup</h3>
+        <p class="text-xs text-slate-500">Paste your exported JSON map backup data below to restore or open your character network map:</p>
+        <textarea id="json-paste-area" rows="10" placeholder="Paste JSON here..." class="w-full text-xs font-mono p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
+        <div class="flex justify-end gap-3">
+          <button id="btn-cancel-import" type="button" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
+          <button id="btn-confirm-import" type="button" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors">Import Map</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById('btn-cancel-import').addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+
+    document.getElementById('btn-confirm-import').addEventListener('click', () => {
+      const jsonString = document.getElementById('json-paste-area').value;
+      if (!jsonString || jsonString.trim() === '') {
+        alert('Please paste valid JSON data.');
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(jsonString);
+        const importedNodes = parsed.characters || parsed.nodes || [];
+        const importedEdges = parsed.relationships || parsed.edges || [];
+        const mapName = parsed.mapName || 'Imported Map';
+
+        const newId = 'map_' + Date.now();
+        mapRegistry.push({ id: newId, name: mapName });
+        
+        localStorage.setItem(`char_map_data_${newId}`, JSON.stringify({
+          nodes: importedNodes,
+          edges: importedEdges
+        }));
+        localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
+
+        renderMapDropdown();
+        loadMapData(newId);
+        modal.classList.add('hidden');
+        alert(`Successfully imported "${mapName}" with ${importedNodes.length} characters!`);
+      } catch (err) {
+        alert('Invalid JSON format. Please check your pasted text and try again.');
+        console.error(err);
+      }
+    });
+  } else {
+    document.getElementById('json-paste-area').value = '';
+    modal.classList.remove('hidden');
+  }
+}
+
 // --- EVENT LISTENERS & BINDINGS ---
 document.addEventListener('DOMContentLoaded', () => {
   initNetworkEngine();
@@ -582,33 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
     URL.revokeObjectURL(url);
   });
 
-  document.getElementById('btn-import-json')?.addEventListener('click', () => {
-    const jsonString = prompt('Paste your exported JSON map backup data below:');
-    if (!jsonString || jsonString.trim() === '') return;
-
-    try {
-      const parsed = JSON.parse(jsonString);
-      const importedNodes = parsed.characters || parsed.nodes || [];
-      const importedEdges = parsed.relationships || parsed.edges || [];
-      const mapName = parsed.mapName || 'Imported Map';
-
-      const newId = 'map_' + Date.now();
-      mapRegistry.push({ id: newId, name: mapName });
-      
-      localStorage.setItem(`char_map_data_${newId}`, JSON.stringify({
-        nodes: importedNodes,
-        edges: importedEdges
-      }));
-      localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
-
-      renderMapDropdown();
-      loadMapData(newId);
-      alert(`Successfully imported "${mapName}" with ${importedNodes.length} characters!`);
-    } catch (err) {
-      alert('Invalid JSON format. Please check your data and try again.');
-      console.error(err);
-    }
-  });
+  document.getElementById('btn-import-json')?.addEventListener('click', openJsonImportModal);
 
   if (window.lucide) lucide.createIcons();
 });
