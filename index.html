@@ -264,7 +264,7 @@
   <!-- Load Main Logic -->
   <script src="app.js"></script>
   <script>
-  // --- ULTRA-FLEXIBLE MODAL IMPORT LOGIC ---
+  // --- BULLETPROOF ROBUST IMPORT LOGIC ---
   document.addEventListener('DOMContentLoaded', () => {
       const importBtn = document.getElementById('btn-open-import-modal');
       const modal = document.getElementById('modal-import-json');
@@ -315,14 +315,36 @@
                   let nodesData = [];
                   let edgesData = [];
 
+                  // Handle different wrapper formats or flat arrays
                   if (Array.isArray(parsedData)) {
-                      // Flat array inspection
                       nodesData = parsedData.filter(item => item.id !== undefined || (item.label !== undefined && item.from === undefined));
                       edgesData = parsedData.filter(item => item.from !== undefined && item.to !== undefined);
                   } else if (typeof parsedData === 'object' && parsedData !== null) {
                       nodesData = parsedData.nodes || parsedData.characters || parsedData.items || [];
                       edgesData = parsedData.edges || parsedData.relationships || parsedData.links || [];
+                      
+                      // If it's a single object (like a single node or edge pasted directly)
+                      if (nodesData.length === 0 && edgesData.length === 0) {
+                          if (parsedData.from !== undefined && parsedData.to !== undefined) {
+                              edgesData = [parsedData];
+                          } else if (parsedData.id !== undefined || parsedData.label !== undefined) {
+                              nodesData = [parsedData];
+                          }
+                      }
                   }
+
+                  // Auto-stub missing nodes referenced by edges so parsing never fails
+                  const existingNodeIds = new Set(nodesData.map(n => String(n.id)));
+                  edgesData.forEach(edge => {
+                      if (edge.from && !existingNodeIds.has(String(edge.from))) {
+                          nodesData.push({ id: String(edge.from), label: `Character ${edge.from}`, group: "Other" });
+                          existingNodeIds.add(String(edge.from));
+                      }
+                      if (edge.to && !existingNodeIds.has(String(edge.to))) {
+                          nodesData.push({ id: String(edge.to), label: `Character ${edge.to}`, group: "Other" });
+                          existingNodeIds.add(String(edge.to));
+                      }
+                  });
 
                   if (nodesData.length > 0 && typeof nodes !== 'undefined' && typeof edges !== 'undefined') {
                       nodes.clear();
@@ -334,10 +356,10 @@
                       alert("Network data imported successfully!");
                       closeModal();
                   } else {
-                      alert("Import failed: Could not find any valid character nodes in the JSON structure.");
+                      alert("Import failed: No valid nodes or relationships could be parsed from this JSON.");
                   }
               } catch (err) {
-                  alert("Invalid JSON: " + err.message);
+                  alert("Invalid JSON format: " + err.message);
               }
           });
       }
