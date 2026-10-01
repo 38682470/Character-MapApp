@@ -1,7 +1,7 @@
 /**
  * DYNAMIC CHARACTER NETWORK MAP - COMPLETE APPLICATION LOGIC
  * Features: Multi-Map Manager, Physics Spacing, Drag-and-Drop Image Conversion, 
- * Auto-Wrapping SVGs with Embedded Photos, Forms, LocalStorage Persistence.
+ * Auto-Wrapping SVGs with Bottom-Banner Photo Text Overlay, Forms, LocalStorage Persistence.
  */
 
 // --- GLOBAL STATE & CONFIGURATION ---
@@ -41,30 +41,30 @@ const DEFAULT_RELATIONSHIPS = [
   { id: 'e5', from: '2', to: '1', label: 'Authority/Power', type: 'Authority/Power', color: { color: REL_COLORS['Authority/Power'] } }
 ];
 
-// --- DYNAMIC SVG GENERATOR (Embedded Photo + Text Overlay) ---
-function createDynamicAvatarSVG(name, shortName = '', fontSize = 26, color = '#6366f1', avatarUrl = '') {
+// --- DYNAMIC SVG GENERATOR (Photo with Bottom-Third Text Banner) ---
+function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6366f1', avatarUrl = '') {
   const displayText = (shortName || name).trim();
-  let textElement = '';
-
-  // Intelligently wrap text if it's long and contains spaces
-  if (displayText.length > 7 && displayText.includes(' ')) {
-    const words = displayText.split(' ');
-    const mid = Math.ceil(words.length / 2);
-    const line1 = words.slice(0, mid).join(' ');
-    const line2 = words.slice(mid).join(' ');
-
-    textElement = `
-      <text x="50" y="${50 - (fontSize * 0.4)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line1}</text>
-      <text x="50" y="${50 + (fontSize * 0.6)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line2}</text>
-    `;
-  } else {
-    textElement = `<text x="50" y="52" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${displayText}</text>`;
-  }
-
   const hasPhoto = avatarUrl && avatarUrl.trim() !== '' && !avatarUrl.startsWith('data:image/svg');
 
   let visualContent = '';
+  let textElement = '';
+
   if (hasPhoto) {
+    // If photo is present, place image across the circle, add a bottom banner, and position text in the bottom third
+    if (displayText.length > 9 && displayText.includes(' ')) {
+      const words = displayText.split(' ');
+      const mid = Math.ceil(words.length / 2);
+      const line1 = words.slice(0, mid).join(' ');
+      const line2 = words.slice(mid).join(' ');
+
+      textElement = `
+        <text x="50" y="73" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.85}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line1}</text>
+        <text x="50" y="90" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.85}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line2}</text>
+      `;
+    } else {
+      textElement = `<text x="50" y="82" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${displayText}</text>`;
+    }
+
     visualContent = `
       <defs>
         <clipPath id="circleClip">
@@ -73,9 +73,25 @@ function createDynamicAvatarSVG(name, shortName = '', fontSize = 26, color = '#6
       </defs>
       <circle cx="50" cy="50" r="48" fill="${color}" />
       <image href="${avatarUrl}" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice" clip-path="url(#circleClip)" />
-      <rect x="0" y="0" width="100" height="100" rx="50" fill="rgba(0, 0, 0, 0.4)" clip-path="url(#circleClip)" />
+      <!-- Dark bottom banner gradient for crystal-clear name readability -->
+      <path d="M 2 62 Q 50 58 98 62 L 98 96 A 48 48 0 0 1 2 96 Z" fill="rgba(0, 0, 0, 0.75)" clip-path="url(#circleClip)" />
     `;
   } else {
+    // Standard centered text for nodes without photos
+    if (displayText.length > 7 && displayText.includes(' ')) {
+      const words = displayText.split(' ');
+      const mid = Math.ceil(words.length / 2);
+      const line1 = words.slice(0, mid).join(' ');
+      const line2 = words.slice(mid).join(' ');
+
+      textElement = `
+        <text x="50" y="${50 - (fontSize * 0.4)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${line1}</text>
+        <text x="50" y="${50 + (fontSize * 0.6)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${line2}</text>
+      `;
+    } else {
+      textElement = `<text x="50" y="52" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${displayText}</text>`;
+    }
+
     visualContent = `<circle cx="50" cy="50" r="48" fill="${color}" />`;
   }
 
@@ -237,7 +253,6 @@ function loadMapData(mapId) {
     edges = parsed.edges || [];
   }
 
-  // Regenerate SVGs with embedded photos and text layers on load
   nodes = nodes.map(n => {
     n.fontSize = n.fontSize || 26;
     n.image = createDynamicAvatarSVG(n.label, n.shortName, n.fontSize, n.color?.border || '#6366f1', n.rawAvatar || n.image);
@@ -486,13 +501,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Character Form Submission (Generates SVG with embedded photo & text overlay)
+  // Character Form Submission (Generates SVG with bottom-banner text overlay)
   document.getElementById('form-character')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const editId = document.getElementById('edit-character-id').value;
     const name = document.getElementById('input-char-name').value.trim();
     const shortName = document.getElementById('input-char-shortname')?.value.trim() || '';
-    const fontSize = parseInt(document.getElementById('input-char-fontsize')?.value) || 26;
+    const fontSize = parseInt(document.getElementById('input-char-fontsize')?.value) || 24;
     const role = document.getElementById('input-char-role').value.trim();
     const avatarUrl = document.getElementById('input-char-avatar').value.trim();
     const bio = document.getElementById('input-char-bio').value.trim();
