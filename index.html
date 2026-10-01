@@ -10,8 +10,19 @@
   <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Custom Stylesheet -->
-  <link rel="stylesheet" href="styles.css">
+  <!-- Embedded Stylesheet to ensure zero dependency issues -->
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      user-select: none;
+    }
+    input, textarea, select { user-select: text; }
+    #character-network canvas { outline: none; }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased h-screen flex flex-col overflow-hidden">
 
