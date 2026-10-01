@@ -1,7 +1,7 @@
 /**
  * DYNAMIC CHARACTER NETWORK MAP - COMPLETE APPLICATION LOGIC
  * Features: Multi-Map Manager, Physics Spacing, Drag-and-Drop Image Conversion, 
- * Auto-Wrapping SVGs, Forms, LocalStorage Persistence.
+ * Auto-Wrapping SVGs with Embedded Photos, Forms, LocalStorage Persistence.
  */
 
 // --- GLOBAL STATE & CONFIGURATION ---
@@ -29,7 +29,7 @@ const DEFAULT_CHARACTERS = [
   { id: '1', label: 'Jean Valjean', shortName: 'Valjean', fontSize: 24, title: 'Protagonist', bio: 'Former convict striving for redemption and moral integrity.', shape: 'circularImage', image: '', color: { border: '#0284c7' } },
   { id: '2', label: 'Javert', shortName: 'Javert', fontSize: 26, title: 'Inspector / Authority', bio: 'Unforgiving police inspector dedicated to rigid law and justice.', shape: 'circularImage', image: '', color: { border: '#f97316' } },
   { id: '3', label: 'Marius', shortName: 'Marius', fontSize: 26, title: 'Lead Male', bio: 'Idealistic student revolutionary deeply in love with Cosette.', shape: 'circularImage', image: '', color: { border: '#a855f7' } },
-  { id: '4', label: 'Cosette', shortName: 'Cosette', fontSize: 26, title: 'Love Interest / Daughter', bio: 'Fantine\'s daughter, raised by Jean Valjean as his own.', shape: 'circularImage', image: '', color: { border: '#84cc16' } },
+  { id: '4', label: 'Cosette', shortName: 'Cosette', fontSize: 26, title: 'Love Interest / Daughter', bio: "Fantine's daughter, raised by Jean Valjean as his own.", shape: 'circularImage', image: '', color: { border: '#84cc16' } },
   { id: '5', label: 'Éponine', shortName: 'Éponine', fontSize: 24, title: 'Tragic Heroine', bio: 'Secretly loves Marius and sacrifices herself at the barricades.', shape: 'circularImage', image: '', color: { border: '#ef4444' } }
 ];
 
@@ -41,8 +41,8 @@ const DEFAULT_RELATIONSHIPS = [
   { id: 'e5', from: '2', to: '1', label: 'Authority/Power', type: 'Authority/Power', color: { color: REL_COLORS['Authority/Power'] } }
 ];
 
-// --- DYNAMIC SVG GENERATOR (Auto-Wrap, Short Name, Font Size) ---
-function createDynamicAvatarSVG(name, shortName = '', fontSize = 26, color = '#6366f1') {
+// --- DYNAMIC SVG GENERATOR (Embedded Photo + Text Overlay) ---
+function createDynamicAvatarSVG(name, shortName = '', fontSize = 26, color = '#6366f1', avatarUrl = '') {
   const displayText = (shortName || name).trim();
   let textElement = '';
 
@@ -54,15 +54,33 @@ function createDynamicAvatarSVG(name, shortName = '', fontSize = 26, color = '#6
     const line2 = words.slice(mid).join(' ');
 
     textElement = `
-      <text x="50" y="${50 - (fontSize * 0.4)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${line1}</text>
-      <text x="50" y="${50 + (fontSize * 0.6)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${line2}</text>
+      <text x="50" y="${50 - (fontSize * 0.4)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line1}</text>
+      <text x="50" y="${50 + (fontSize * 0.6)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line2}</text>
     `;
   } else {
-    textElement = `<text x="50" y="52" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${displayText}</text>`;
+    textElement = `<text x="50" y="52" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${displayText}</text>`;
   }
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-    <circle cx="50" cy="50" r="48" fill="${color}" />
+  const hasPhoto = avatarUrl && avatarUrl.trim() !== '' && !avatarUrl.startsWith('data:image/svg');
+
+  let visualContent = '';
+  if (hasPhoto) {
+    visualContent = `
+      <defs>
+        <clipPath id="circleClip">
+          <circle cx="50" cy="50" r="48" />
+        </clipPath>
+      </defs>
+      <circle cx="50" cy="50" r="48" fill="${color}" />
+      <image href="${avatarUrl}" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice" clip-path="url(#circleClip)" />
+      <rect x="0" y="0" width="100" height="100" rx="50" fill="rgba(0, 0, 0, 0.4)" clip-path="url(#circleClip)" />
+    `;
+  } else {
+    visualContent = `<circle cx="50" cy="50" r="48" fill="${color}" />`;
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100" viewBox="0 0 100 100">
+    ${visualContent}
     ${textElement}
   </svg>`;
 
@@ -81,8 +99,8 @@ function initNetworkEngine() {
       borderWidthSelected: 6,
       size: 40,
       font: {
-        size: 0,              // Suppress default vis-network external label rendering
-        color: 'transparent'  // Hide external text label completely
+        size: 0,
+        color: 'transparent'
       },
       shadow: { enabled: true, color: 'rgba(0,0,0,0.1)', size: 8, x: 0, y: 4 }
     },
@@ -106,7 +124,6 @@ function initNetworkEngine() {
   network.on('deselectNode', handleDeselect);
   renderLegend();
 
-  // Wire up Spacing Slider matching HTML ID #slider-line-spacing
   const spacingSlider = document.getElementById('slider-line-spacing');
   if (spacingSlider) {
     spacingSlider.addEventListener('input', (e) => {
@@ -220,12 +237,10 @@ function loadMapData(mapId) {
     edges = parsed.edges || [];
   }
 
-  // Regenerate SVGs dynamically on load to ensure scaling and shortNames apply
+  // Regenerate SVGs with embedded photos and text layers on load
   nodes = nodes.map(n => {
     n.fontSize = n.fontSize || 26;
-    if (!n.image || n.image === '' || n.image.includes('data:image/svg+xml')) {
-      n.image = createDynamicAvatarSVG(n.label, n.shortName, n.fontSize, n.color?.border || '#6366f1');
-    }
+    n.image = createDynamicAvatarSVG(n.label, n.shortName, n.fontSize, n.color?.border || '#6366f1', n.rawAvatar || n.image);
     return n;
   });
 
@@ -309,7 +324,7 @@ function updateInspector(nodeId) {
   document.getElementById('inspector-content')?.classList.remove('hidden');
 
   const avatarEl = document.getElementById('inspector-avatar');
-  if (avatarEl) avatarEl.src = char.image || createDynamicAvatarSVG(char.label, char.shortName, char.fontSize);
+  if (avatarEl) avatarEl.src = char.rawAvatar || (char.image.startsWith('data:image/svg') ? '' : char.image);
   
   const nameEl = document.getElementById('inspector-name');
   if (nameEl) nameEl.textContent = char.label;
@@ -380,7 +395,7 @@ function populateEditForm(char) {
   setVal('input-char-fontsize', char.fontSize || 26);
   setVal('input-char-role', char.title || '');
   setVal('input-char-bio', char.bio || '');
-  setVal('input-char-avatar', char.image.startsWith('data:image/svg') ? '' : char.image);
+  setVal('input-char-avatar', char.rawAvatar || '');
 
   document.getElementById('btn-save-character').textContent = 'Update Character';
   document.getElementById('btn-delete-character')?.classList.remove('hidden');
@@ -442,7 +457,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initNetworkEngine();
   initMapRegistry();
 
-  // Map Switcher & View Controls
   document.getElementById('select-active-map')?.addEventListener('change', (e) => loadMapData(e.target.value));
   document.getElementById('btn-new-map')?.addEventListener('click', createNewMap);
   document.getElementById('btn-rename-map')?.addEventListener('click', renameActiveMap);
@@ -453,7 +467,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-reset-view')?.addEventListener('click', () => network?.fit({ animation: { duration: 500 } }));
   document.getElementById('btn-clear-selection')?.addEventListener('click', () => { network?.unselectAll(); handleDeselect(); });
 
-  // Drag & Drop / Image File Input mapping correctly to HTML ID #input-char-avatar-file & #avatar-dropzone
   const fileInput = document.getElementById('input-char-avatar-file');
   const dropZone = document.getElementById('avatar-dropzone');
 
@@ -473,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Character Form Submission (Includes SVG Auto-Wrap Logic)
+  // Character Form Submission (Generates SVG with embedded photo & text overlay)
   document.getElementById('form-character')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const editId = document.getElementById('edit-character-id').value;
@@ -484,14 +497,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const avatarUrl = document.getElementById('input-char-avatar').value.trim();
     const bio = document.getElementById('input-char-bio').value.trim();
 
-    const isImageAvailable = avatarUrl !== '' && !avatarUrl.startsWith('data:image/svg');
-    const imageSrc = isImageAvailable ? avatarUrl : createDynamicAvatarSVG(name, shortName, fontSize);
+    const nodeColor = '#6366f1';
+    const finalImageSvg = createDynamicAvatarSVG(name, shortName, fontSize, nodeColor, avatarUrl);
 
     if (editId) {
-      nodesDataSet.update({ id: editId, label: name, shortName, fontSize, title: role, bio: bio, image: imageSrc });
+      nodesDataSet.update({ 
+        id: editId, 
+        label: name, 
+        shortName, 
+        fontSize, 
+        title: role, 
+        bio: bio, 
+        image: finalImageSvg,
+        rawAvatar: avatarUrl
+      });
       if (selectedNodeId === editId) updateInspector(editId);
     } else {
-      nodesDataSet.add({ id: String(Date.now()), label: name, shortName, fontSize, title: role, bio: bio, shape: 'circularImage', image: imageSrc, color: { border: '#6366f1' } });
+      nodesDataSet.add({ 
+        id: String(Date.now()), 
+        label: name, 
+        shortName, 
+        fontSize, 
+        title: role, 
+        bio: bio, 
+        shape: 'circularImage', 
+        image: finalImageSvg, 
+        rawAvatar: avatarUrl,
+        color: { border: nodeColor } 
+      });
     }
 
     saveDataToLocalStorage();
@@ -499,7 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!editId) resetCharacterForm();
   });
 
-  // Delete Character
   document.getElementById('btn-delete-character')?.addEventListener('click', () => {
     const editId = document.getElementById('edit-character-id').value;
     if (!editId) return;
@@ -515,7 +547,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-mode-toggle')?.addEventListener('click', resetCharacterForm);
 
-  // Relationship Form
   document.getElementById('form-relationship')?.addEventListener('submit', (e) => {
     e.preventDefault();
     if (!selectedNodeId) return alert('Select a primary character first.');
@@ -543,7 +574,6 @@ document.addEventListener('DOMContentLoaded', () => {
     e.target.reset();
   });
 
-  // JSON Import/Export Logic
   document.getElementById('btn-export-json')?.addEventListener('click', () => {
     const currentMap = mapRegistry.find(m => m.id === activeMapId);
     const blob = new Blob([JSON.stringify({ mapName: currentMap?.name || 'Map', characters: nodesDataSet.get(), relationships: edgesDataSet.get() }, null, 2)], { type: 'application/json' });
