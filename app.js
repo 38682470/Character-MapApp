@@ -1,9 +1,6 @@
 /**
  * Character Map Studio - Application Logic
- * Includes 3-Layer Data Protection Framework:
- * 1. Isolated Map Deletion & Registry Cleanup
- * 2. Layer 2 Automated Rolling Snapshot Backup
- * 3. Defensive Startup & Recovery Check
+ * Includes 3-Layer Data Protection Framework & Robust UI Event Binding
  */
 
 let currentMapId = localStorage.getItem('char_map_active_id_v1') || 'map_roots_primary';
@@ -163,6 +160,13 @@ function openExportModal() {
         textarea.value = JSON.stringify(data, null, 2);
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+    } else {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `character_map_${currentMapId}.json`;
+        a.click();
     }
 }
 
@@ -175,24 +179,57 @@ function closeExportModal() {
 }
 
 function importJsonData() {
-    try {
-        const textarea = document.getElementById('jsonTextArea');
-        if (!textarea) return;
-        const parsed = JSON.parse(textarea.value);
-        if (parsed.nodes && parsed.edges) {
-            nodesDataset.clear();
-            edgesDataset.clear();
-            nodesDataset.add(parsed.nodes);
-            edgesDataset.add(parsed.edges);
-            saveMapDataWithBackup();
-            closeExportModal();
-            location.reload();
-        } else {
-            alert('Invalid JSON format: missing nodes or edges.');
+    const textarea = document.getElementById('jsonTextArea');
+    if (textarea && textarea.value.trim() !== '') {
+        try {
+            const parsed = JSON.parse(textarea.value);
+            if (parsed.nodes && parsed.edges) {
+                nodesDataset.clear();
+                edgesDataset.clear();
+                nodesDataset.add(parsed.nodes);
+                nodesDataset.add(parsed.edges);
+                saveMapDataWithBackup();
+                closeExportModal();
+                location.reload();
+                return;
+            } else {
+                alert('Invalid JSON format: missing nodes or edges.');
+                return;
+            }
+        } catch (err) {
+            alert('Parsing error: ' + err.message);
+            return;
         }
-    } catch (err) {
-        alert('Parsing error: ' + err.message);
     }
+
+    // Direct file picker fallback
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json';
+    fileInput.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = event => {
+            try {
+                const parsed = JSON.parse(event.target.result);
+                if (parsed.nodes && parsed.edges) {
+                    nodesDataset.clear();
+                    edgesDataset.clear();
+                    nodesDataset.add(parsed.nodes);
+                    nodesDataset.add(parsed.edges);
+                    saveMapDataWithBackup();
+                    location.reload();
+                } else {
+                    alert('Invalid JSON file structure: missing nodes or edges.');
+                }
+            } catch (err) {
+                alert('Error parsing JSON file: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+    fileInput.click();
 }
 
 function initNetwork() {
@@ -235,6 +272,14 @@ function initNetwork() {
         saveMapDataWithBackup();
     });
 }
+
+// Ensure all handlers are exposed globally on window
+window.openExportModal = openExportModal;
+window.closeExportModal = closeExportModal;
+window.importJsonData = importJsonData;
+window.deleteActiveMap = deleteActiveMap;
+window.createNewMap = createNewMap;
+window.promptRenameMap = promptRenameMap;
 
 const spacingRange = document.getElementById('edgeSpacingRange');
 if (spacingRange) {
