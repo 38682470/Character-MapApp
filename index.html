@@ -264,7 +264,7 @@
   <!-- Load Main Logic -->
   <script src="app.js"></script>
   <script>
-  // --- CUSTOM MODAL IMPORT LOGIC ---
+  // --- ROBUST MODAL IMPORT LOGIC ---
   document.addEventListener('DOMContentLoaded', () => {
       const importBtn = document.getElementById('btn-open-import-modal');
       const modal = document.getElementById('modal-import-json');
@@ -311,15 +311,20 @@
               }
               try {
                   const parsedData = JSON.parse(jsonStr);
-                  if (parsedData.nodes && parsedData.edges && typeof nodes !== 'undefined' && typeof edges !== 'undefined') {
+                  
+                  // Support both explicit {nodes, edges} and top-level arrays or alternative keys
+                  let nodesData = parsedData.nodes || parsedData.characters || (Array.isArray(parsedData) ? parsedData : null);
+                  let edgesData = parsedData.edges || parsedData.relationships || parsedData.links || [];
+
+                  if (nodesData && typeof nodes !== 'undefined' && typeof edges !== 'undefined') {
                       nodes.clear();
                       edges.clear();
-                      nodes.add(parsedData.nodes);
-                      edges.add(parsedData.edges);
+                      nodes.add(nodesData);
+                      edges.add(edgesData);
                       alert("Network data imported successfully!");
                       closeModal();
                   } else {
-                      alert("Import failed: JSON must contain both 'nodes' and 'edges' arrays.");
+                      alert("Import failed: JSON must contain a 'nodes' or character array.");
                   }
               } catch (err) {
                   alert("Invalid JSON: " + err.message);
