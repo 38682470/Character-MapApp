@@ -1,270 +1,191 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dynamic Character Network Map</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Vis-Network CDN -->
-  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-  <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Character Mapping Application</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vis.js Network -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        #network-container {
+            width: 100%;
+            height: 100%;
+            background-color: #f9fafb;
+        }
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+    </style>
 </head>
-<body class="bg-slate-100 font-sans text-slate-800 antialiased h-screen overflow-hidden">
+<body class="bg-gray-100 h-screen flex flex-col overflow-hidden text-gray-800">
 
-  <!-- Main Container -->
-  <div class="flex h-full w-full">
+    <!-- Header -->
+    <header class="bg-white shadow-sm z-10 p-4 flex justify-between items-center shrink-0">
+        <div class="flex items-center space-x-4">
+            <h1 id="headerMapTitle" class="text-xl font-bold text-gray-800">Character Map</h1>
+            <select id="mapSelect" class="border-gray-300 rounded-md text-sm border p-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="default">Default Map</option>
+                <!-- Dynamically populated via app.js -->
+            </select>
+            <button id="btnNewMap" class="p-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 flex items-center text-sm" title="Create New Map">
+                <i data-lucide="plus" class="w-4 h-4 mr-1"></i> New Map
+            </button>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button id="btnOpenJsonModal" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors flex items-center">
+                <i data-lucide="file-json" class="w-4 h-4 mr-2"></i> Data (JSON)
+            </button>
+            <button id="btnClearMap" class="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-md text-sm font-medium transition-colors">
+                Clear Map
+            </button>
+        </div>
+    </header>
 
-    <!-- CANVAS VIEW (Left ~70%) -->
-    <div class="relative flex-1 h-full bg-slate-50 border-r border-slate-200">
-      
-      <!-- Top Canvas Header Bar with Multi-Map Book Switcher -->
-      <div class="absolute top-4 left-4 z-10 flex items-center gap-3 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-sm border border-slate-200/80 max-w-[calc(100%-120px)] flex-wrap">
+    <!-- Main Layout -->
+    <div class="flex flex-1 overflow-hidden">
         
-        <!-- Book / Map Selector Controls -->
-        <div class="flex items-center gap-1.5 border-r border-slate-200 pr-3">
-          <i data-lucide="book-open" class="w-4 h-4 text-indigo-600"></i>
-          <select id="select-active-map" class="text-xs font-bold text-slate-800 bg-transparent border-none outline-hidden cursor-pointer pr-1 hover:text-indigo-600 transition-colors">
-            <!-- Dynamically Populated Maps -->
-          </select>
-          <button id="btn-new-map" title="Create New Book Map" class="p-1 hover:bg-slate-100 rounded-md text-slate-600 transition-colors">
-            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-          </button>
-          <button id="btn-rename-map" title="Rename Active Map" class="p-1 hover:bg-slate-100 rounded-md text-slate-600 transition-colors">
-            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-          </button>
-          <button id="btn-delete-map" title="Delete Active Map" class="p-1 hover:bg-slate-100 hover:text-rose-600 rounded-md text-slate-400 transition-colors">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
+        <!-- Left Workspace (Network Canvas & Floating Panels) -->
+        <main class="flex-1 relative flex flex-col">
+            <!-- Canvas -->
+            <div id="network-container" class="flex-1"></div>
 
-        <!-- NEW: Line Spacing Slider -->
-        <div class="flex items-center gap-2 border-r border-slate-200 pr-3">
-            <i data-lucide="scaling" class="w-4 h-4 text-slate-500" title="Adjust Node Spacing"></i>
-            <input type="range" id="slider-line-spacing" min="100" max="800" value="300" class="w-24 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer">
-        </div>
-
-        <div class="text-xs font-semibold text-slate-600">
-          <span id="stat-characters">0</span> characters, <span id="stat-relationships">0</span> relationships
-        </div>
-        <button id="btn-clear-selection" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-300 font-medium transition-colors hidden">
-          Clear selection
-        </button>
-      </div>
-
-      <!-- Top Right Control Panel -->
-      <div class="absolute top-4 right-4 z-10 flex flex-col gap-1.5 bg-white/90 backdrop-blur-md p-1.5 rounded-xl shadow-sm border border-slate-200/80">
-        <button id="btn-zoom-in" title="Zoom In" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
-          <i data-lucide="zoom-in" class="w-5 h-5"></i>
-        </button>
-        <button id="btn-zoom-out" title="Zoom Out" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
-          <i data-lucide="zoom-out" class="w-5 h-5"></i>
-        </button>
-        <button id="btn-reset-view" title="Reset View" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors border-t border-slate-100">
-          <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
-        </button>
-      </div>
-
-      <!-- Vis-Network Interactive Canvas Container -->
-      <div id="character-network" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
-
-      <!-- Bottom Left Floating Relationship Legend -->
-      <div class="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-md border border-slate-200/80 w-60">
-        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">Relationship Types</h4>
-        <div id="legend-list" class="space-y-2 text-xs font-medium text-slate-600">
-          <!-- Dynamic Legend Items Populated by JS -->
-        </div>
-      </div>
-
-      <!-- Bottom Right Data Backup Tools -->
-      <div class="absolute bottom-4 right-4 z-10 flex items-center gap-2 bg-white/90 backdrop-blur-md p-2 rounded-xl shadow-sm border border-slate-200/80">
-        <button id="btn-export-json" class="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
-          <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
-        </button>
-        <button id="btn-open-import-modal" class="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
-          <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import JSON
-        </button>
-      </div>
-    </div>
-
-    <!-- SIDEBAR INSPECTOR & EDITOR (Right ~30%) -->
-    <div class="w-[420px] h-full bg-white flex flex-col border-l border-slate-200 shadow-lg z-20">
-      
-      <!-- Upper Section: Character Inspector -->
-      <div class="p-6 border-b border-slate-200 overflow-y-auto max-h-[50%] bg-slate-50/50">
-        <div id="inspector-empty-state" class="py-12 text-center text-slate-400">
-          <i data-lucide="user-search" class="w-12 h-12 mx-auto mb-3 stroke-1 text-slate-300"></i>
-          <p class="text-sm font-medium">Select a character from the map to view details.</p>
-        </div>
-
-        <div id="inspector-content" class="hidden space-y-4">
-          <!-- Header info -->
-          <div class="flex items-start gap-4">
-            <img id="inspector-avatar" src="" alt="Avatar" class="w-16 h-16 rounded-full object-cover border-2 border-indigo-500 shadow-sm bg-slate-200">
-            <div>
-              <h2 id="inspector-name" class="text-xl font-bold text-slate-800 leading-tight"></h2>
-              <span id="inspector-archetype" class="inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100"></span>
-            </div>
-          </div>
-
-          <!-- Description / Bio -->
-          <div>
-            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Character Overview</h4>
-            <p id="inspector-description" class="text-sm text-slate-600 leading-relaxed bg-white p-3 rounded-lg border border-slate-200 shadow-2xs"></p>
-          </div>
-
-          <!-- Relationships Breakdown -->
-          <div>
-            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Connected Relationships</h4>
-            <div id="inspector-relationships-list" class="space-y-2">
-              <!-- Dynamically populated links -->
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Lower Section: Form Drawer -->
-      <div class="flex-1 p-6 overflow-y-auto bg-white space-y-6">
-        
-        <!-- Form Header Toggle -->
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <h3 id="form-title" class="text-base font-bold text-slate-800">Add New Character</h3>
-          <button id="btn-mode-toggle" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold underline">
-            Reset to New Form
-          </button>
-        </div>
-
-        <!-- Character Details Form -->
-        <form id="form-character" class="space-y-3">
-          <input type="hidden" id="edit-character-id">
-          
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Character Name (Full)</label>
-            <input type="text" id="input-char-name" required placeholder="e.g., Jean Valjean" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-          </div>
-
-          <!-- NEW: Short Name & Font Size -->
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">In-Circle Name (Optional)</label>
-              <input type="text" id="input-char-shortname" placeholder="e.g., Valjean" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-            </div>
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Node Font Size (px)</label>
-              <input type="number" id="input-char-fontsize" value="14" min="8" max="36" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Archetype / Role Tag</label>
-            <input type="text" id="input-char-role" placeholder="e.g., Protagonist" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-          </div>
-
-          <!-- NEW: Drag & Drop Avatar Zone replacing basic URL input -->
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Avatar Image</label>
-            <div id="avatar-dropzone" class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 hover:border-indigo-400 transition-colors cursor-pointer flex flex-col items-center justify-center gap-2 group relative">
-                <i data-lucide="image-plus" class="w-6 h-6 text-slate-400 group-hover:text-indigo-500 transition-colors"></i>
-                <div class="text-xs text-slate-500 font-medium">
-                    <span class="text-indigo-600">Click to browse</span> or drag image here
+            <!-- Floating Relationship Types Panel (Bottom Left) -->
+            <div class="absolute bottom-4 left-4 w-72 bg-white p-4 rounded-lg shadow-lg border border-gray-200 z-10 flex flex-col gap-3">
+                <h3 class="font-semibold text-sm text-gray-700 border-b pb-2">Relationship Lines</h3>
+                
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between items-center">
+                        <label class="text-gray-600">Style</label>
+                        <select id="edgeStyle" class="border rounded p-1 w-32">
+                            <option value="solid">Solid</option>
+                            <option value="dashed">Dashed</option>
+                            <option value="dashes">Dotted</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <label class="text-gray-600">Direction</label>
+                        <select id="edgeArrow" class="border rounded p-1 w-32">
+                            <option value="to">To (->)</option>
+                            <option value="from">From (<-)</option>
+                            <option value="both">Both (<->)</option>
+                            <option value="none">None (-)</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <label class="text-gray-600">Color</label>
+                        <input type="color" id="edgeColor" value="#848484" class="w-8 h-8 rounded border p-0 cursor-pointer">
+                    </div>
+                    <div class="flex flex-col gap-1 mt-2">
+                        <label class="text-gray-600">Default Label</label>
+                        <input type="text" id="edgeLabel" placeholder="e.g. 'Friend', 'Enemy'" class="border rounded p-1.5 w-full text-sm">
+                    </div>
                 </div>
-                <div class="text-[10px] text-slate-400">or paste a URL below</div>
-                <!-- Hidden file input -->
-                <input type="file" id="input-char-avatar-file" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <div class="bg-blue-50 text-blue-800 text-xs p-2 rounded mt-1">
+                    Select two nodes and click below to connect them, or use the graph's edit mode.
+                </div>
+                <button id="btnAddEdge" class="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 rounded transition-colors text-sm">
+                    Connect Selected Nodes
+                </button>
             </div>
-            <input type="url" id="input-char-avatar" placeholder="https://... or auto-filled Base64" class="w-full text-xs px-3 py-2 mt-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-400">
-          </div>
+        </main>
 
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">Overview / Bio Notes</label>
-            <textarea id="input-char-bio" rows="3" placeholder="Enter notes or character background..." class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"></textarea>
-          </div>
-
-          <div class="flex gap-2 pt-1">
-            <button type="submit" id="btn-save-character" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm py-2 rounded-lg transition-colors shadow-xs">
-              Save Character
-            </button>
-            <button type="button" id="btn-delete-character" class="hidden bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-medium text-sm px-3 py-2 rounded-lg transition-colors">
-              Delete
-            </button>
-          </div>
-        </form>
-
-        <hr class="border-slate-100">
-
-        <!-- Relationship Link Form -->
-        <div class="space-y-3">
-          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Manage Relationship Link</h4>
-          <form id="form-relationship" class="space-y-3">
-            <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Target Connected Character</label>
-              <select id="select-target-character" required class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-                <option value="">-- Select Target --</option>
-              </select>
+        <!-- Right Sidebar (Character Management) -->
+        <aside class="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto z-10 shadow-[-4px_0_15px_rgba(0,0,0,0.03)]">
+            <div class="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                <h2 class="font-bold text-gray-700">Character Details</h2>
+                <button id="btnNewNode" class="text-sm bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 flex items-center">
+                    <i data-lucide="user-plus" class="w-4 h-4 mr-1"></i> New
+                </button>
             </div>
+            
+            <form id="nodeForm" class="p-4 flex flex-col gap-4">
+                <input type="hidden" id="nodeId">
+                
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium text-gray-700">Name</label>
+                    <input type="text" id="nodeLabel" required class="border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                </div>
 
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Relationship Type</label>
-                <select id="select-rel-type" required class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-                  <option value="Ally/Friend">Ally/Friend</option>
-                  <option value="Authority/Power">Authority/Power</option>
-                  <option value="Family">Family</option>
-                  <option value="Rival/Enemy">Rival/Enemy</option>
-                  <option value="Romantic">Romantic</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Custom Label (Optional)</label>
-                <input type="text" id="input-rel-label" placeholder="e.g., Foster Father" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-              </div>
-            </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium text-gray-700">Group / Faction</label>
+                    <input type="text" id="nodeGroup" class="border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Protagonists">
+                </div>
 
-            <button type="submit" id="btn-save-relationship" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium text-sm py-2 rounded-lg transition-colors shadow-xs">
-              Link Relationships
-            </button>
-          </form>
-        </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm font-medium text-gray-700">Shape</label>
+                        <select id="nodeShape" class="border border-gray-300 rounded-md p-2 text-sm">
+                            <option value="ellipse">Ellipse</option>
+                            <option value="box">Box</option>
+                            <option value="circle">Circle</option>
+                            <option value="database">Database</option>
+                            <option value="diamond">Diamond</option>
+                            <option value="dot">Dot</option>
+                            <option value="square">Square</option>
+                            <option value="triangle">Triangle</option>
+                        </select>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm font-medium text-gray-700">Color</label>
+                        <input type="color" id="nodeColor" value="#97C2FC" class="border border-gray-300 rounded-md h-9 w-full p-1 cursor-pointer">
+                    </div>
+                </div>
 
-      </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium text-gray-700">Details / Notes</label>
+                    <textarea id="nodeTitle" rows="3" class="border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Hover tooltip text..."></textarea>
+                </div>
+
+                <div class="flex flex-col gap-2 pt-2 border-t mt-2">
+                    <button type="submit" id="btnSaveNode" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-md transition-colors">
+                        Save Character
+                    </button>
+                    <button type="button" id="btnDeleteNode" class="w-full bg-white border border-red-300 text-red-600 hover:bg-red-50 font-medium py-2 rounded-md transition-colors hidden">
+                        Delete Character
+                    </button>
+                </div>
+            </form>
+        </aside>
     </div>
 
-  </div>
-
-  <!-- JSON Copy-Paste Import Modal -->
-  <div id="modal-import-json" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 hidden">
-    <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-[550px] max-w-[90vw] p-6 space-y-4">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-        <h3 class="text-base font-bold text-slate-800">Import Character Map JSON</h3>
-        <button id="btn-close-import-modal" class="text-slate-400 hover:text-slate-600 transition-colors">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-      <div>
-        <label class="block text-xs font-semibold text-slate-600 mb-1">Paste JSON Code Below:</label>
-        <textarea id="textarea-import-json" rows="10" placeholder="Paste your generated JSON here..." class="w-full text-xs font-mono p-3 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"></textarea>
-      </div>
-      <div class="flex items-center justify-between gap-3 pt-2">
-        <label class="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer">
-          <i data-lucide="file-up" class="w-3.5 h-3.5"></i> Or choose a .json file
-          <input type="file" id="input-import-json-file" accept=".json" class="hidden">
-        </label>
-        <div class="flex items-center gap-2">
-          <button id="btn-cancel-import" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-            Cancel
-          </button>
-          <button id="btn-submit-import-json" class="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-xs">
-            Import Data
-          </button>
+    <!-- JSON Import/Export Modal -->
+    <div id="jsonModal" class="fixed inset-0 modal-backdrop hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 class="text-lg font-bold text-gray-800">Map Data (JSON)</h2>
+                <button id="btnCloseModal" class="text-gray-500 hover:text-gray-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-4 flex-1 overflow-hidden flex flex-col gap-2">
+                <p class="text-sm text-gray-600">Copy this JSON to backup your map, or paste JSON here to import a saved map.</p>
+                <textarea id="jsonTextarea" class="w-full flex-1 border font-mono text-xs p-3 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-none min-h-[300px]"></textarea>
+            </div>
+            <div class="p-4 border-t flex justify-between bg-gray-50">
+                <button id="btnCopyJson" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-100 text-sm font-medium transition-colors">
+                    Copy to Clipboard
+                </button>
+                <div class="space-x-2">
+                    <button id="btnImportJson" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium transition-colors">
+                        Import Data
+                    </button>
+                    <button id="btnExportJson" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors">
+                        Generate Export
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
     </div>
-  </div>
 
-  <!-- Load Main Logic -->
-  <script src="app.js"></script>
+    <!-- Main Logic Script -->
+    <script src="app.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+    </script>
 </body>
 </html>
