@@ -3,189 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Character Mapping Application</title>
+    <title>Character Network Map</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Vis.js Network -->
+    <!-- Vis-Network CDN -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        #network-container {
-            width: 100%;
-            height: 100%;
-            background-color: #f9fafb;
-        }
-        .modal-backdrop {
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-    </style>
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 h-screen flex flex-col overflow-hidden text-gray-800">
+<body class="bg-gray-900 text-white min-h-screen flex flex-col font-sans">
 
-    <!-- Header -->
-    <header class="bg-white shadow-sm z-10 p-4 flex justify-between items-center shrink-0">
-        <div class="flex items-center space-x-4">
-            <h1 id="headerMapTitle" class="text-xl font-bold text-gray-800">Character Map</h1>
-            <select id="mapSelect" class="border-gray-300 rounded-md text-sm border p-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="default">Default Map</option>
-                <!-- Dynamically populated via app.js -->
-            </select>
-            <button id="btnNewMap" class="p-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 flex items-center text-sm" title="Create New Map">
-                <i data-lucide="plus" class="w-4 h-4 mr-1"></i> New Map
-            </button>
+    <!-- Top Navigation / Controls Bar -->
+    <header class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <i data-lucide="share-2" class="w-6 h-6 text-indigo-400"></i>
+            <h1 class="text-xl font-bold tracking-wide">Character Network Map</h1>
         </div>
-        <div class="flex items-center space-x-2">
-            <button id="btnOpenJsonModal" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors flex items-center">
-                <i data-lucide="file-json" class="w-4 h-4 mr-2"></i> Data (JSON)
-            </button>
-            <button id="btnClearMap" class="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-md text-sm font-medium transition-colors">
-                Clear Map
-            </button>
+
+        <div class="flex items-center gap-4 flex-wrap">
+            <!-- Multi-Map Selector -->
+            <div class="flex items-center gap-2">
+                <label for="map-select" class="text-sm font-medium text-gray-300">Map:</label>
+                <select id="map-select" class="bg-gray-700 text-white text-sm rounded-lg border border-gray-600 px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <option value="default">Default Network</option>
+                </select>
+                <button id="add-map-btn" title="Add New Map" class="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Physics / Node Spacing Slider -->
+            <div class="flex items-center gap-2 bg-gray-700/50 px-3 py-1.5 rounded-lg border border-gray-600">
+                <i data-lucide="sliders" class="w-4 h-4 text-gray-400"></i>
+                <label for="node-spacing-slider" class="text-xs font-medium text-gray-300">Spacing:</label>
+                <input type="range" id="node-spacing-slider" min="50" max="400" value="150" class="w-24 accent-indigo-500 cursor-pointer">
+            </div>
+
+            <!-- Import / Export Actions -->
+            <div class="flex items-center gap-2">
+                <button id="open-import-modal-btn" class="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+                    <i data-lucide="upload" class="w-4 h-4 text-indigo-400"></i>
+                    Import JSON
+                </button>
+                <button id="export-json-btn" class="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+                    <i data-lucide="download" class="w-4 h-4 text-green-400"></i>
+                    Export JSON
+                </button>
+            </div>
         </div>
     </header>
 
-    <!-- Main Layout -->
-    <div class="flex flex-1 overflow-hidden">
-        
-        <!-- Left Workspace (Network Canvas & Floating Panels) -->
-        <main class="flex-1 relative flex flex-col">
-            <!-- Canvas -->
-            <div id="network-container" class="flex-1"></div>
+    <!-- Main Workspace -->
+    <main class="flex-1 relative overflow-hidden flex">
+        <!-- Vis-Network Graph Container -->
+        <div id="network-container" class="w-full h-full min-h-[calc(100vh-80px)] bg-gray-950"></div>
+    </main>
 
-            <!-- Floating Relationship Types Panel (Bottom Left) -->
-            <div class="absolute bottom-4 left-4 w-72 bg-white p-4 rounded-lg shadow-lg border border-gray-200 z-10 flex flex-col gap-3">
-                <h3 class="font-semibold text-sm text-gray-700 border-b pb-2">Relationship Lines</h3>
-                
-                <div class="space-y-2 text-sm">
-                    <div class="flex justify-between items-center">
-                        <label class="text-gray-600">Style</label>
-                        <select id="edgeStyle" class="border rounded p-1 w-32">
-                            <option value="solid">Solid</option>
-                            <option value="dashed">Dashed</option>
-                            <option value="dashes">Dotted</option>
-                        </select>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <label class="text-gray-600">Direction</label>
-                        <select id="edgeArrow" class="border rounded p-1 w-32">
-                            <option value="to">To (->)</option>
-                            <option value="from">From (<-)</option>
-                            <option value="both">Both (<->)</option>
-                            <option value="none">None (-)</option>
-                        </select>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <label class="text-gray-600">Color</label>
-                        <input type="color" id="edgeColor" value="#848484" class="w-8 h-8 rounded border p-0 cursor-pointer">
-                    </div>
-                    <div class="flex flex-col gap-1 mt-2">
-                        <label class="text-gray-600">Default Label</label>
-                        <input type="text" id="edgeLabel" placeholder="e.g. 'Friend', 'Enemy'" class="border rounded p-1.5 w-full text-sm">
-                    </div>
-                </div>
-                <div class="bg-blue-50 text-blue-800 text-xs p-2 rounded mt-1">
-                    Select two nodes and click below to connect them, or use the graph's edit mode.
-                </div>
-                <button id="btnAddEdge" class="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-1.5 rounded transition-colors text-sm">
-                    Connect Selected Nodes
-                </button>
-            </div>
-        </main>
-
-        <!-- Right Sidebar (Character Management) -->
-        <aside class="w-80 bg-white border-l border-gray-200 flex flex-col shrink-0 overflow-y-auto z-10 shadow-[-4px_0_15px_rgba(0,0,0,0.03)]">
-            <div class="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                <h2 class="font-bold text-gray-700">Character Details</h2>
-                <button id="btnNewNode" class="text-sm bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 flex items-center">
-                    <i data-lucide="user-plus" class="w-4 h-4 mr-1"></i> New
-                </button>
-            </div>
-            
-            <form id="nodeForm" class="p-4 flex flex-col gap-4">
-                <input type="hidden" id="nodeId">
-                
-                <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-gray-700">Name</label>
-                    <input type="text" id="nodeLabel" required class="border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
-
-                <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-gray-700">Group / Faction</label>
-                    <input type="text" id="nodeGroup" class="border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Protagonists">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="flex flex-col gap-1">
-                        <label class="text-sm font-medium text-gray-700">Shape</label>
-                        <select id="nodeShape" class="border border-gray-300 rounded-md p-2 text-sm">
-                            <option value="ellipse">Ellipse</option>
-                            <option value="box">Box</option>
-                            <option value="circle">Circle</option>
-                            <option value="database">Database</option>
-                            <option value="diamond">Diamond</option>
-                            <option value="dot">Dot</option>
-                            <option value="square">Square</option>
-                            <option value="triangle">Triangle</option>
-                        </select>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="text-sm font-medium text-gray-700">Color</label>
-                        <input type="color" id="nodeColor" value="#97C2FC" class="border border-gray-300 rounded-md h-9 w-full p-1 cursor-pointer">
-                    </div>
-                </div>
-
-                <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-gray-700">Details / Notes</label>
-                    <textarea id="nodeTitle" rows="3" class="border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Hover tooltip text..."></textarea>
-                </div>
-
-                <div class="flex flex-col gap-2 pt-2 border-t mt-2">
-                    <button type="submit" id="btnSaveNode" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-md transition-colors">
-                        Save Character
-                    </button>
-                    <button type="button" id="btnDeleteNode" class="w-full bg-white border border-red-300 text-red-600 hover:bg-red-50 font-medium py-2 rounded-md transition-colors hidden">
-                        Delete Character
-                    </button>
-                </div>
-            </form>
-        </aside>
-    </div>
-
-    <!-- JSON Import/Export Modal -->
-    <div id="jsonModal" class="fixed inset-0 modal-backdrop hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
-            <div class="p-4 border-b flex justify-between items-center">
-                <h2 class="text-lg font-bold text-gray-800">Map Data (JSON)</h2>
-                <button id="btnCloseModal" class="text-gray-500 hover:text-gray-800">
+    <!-- In-App JSON Import Modal -->
+    <div id="import-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl w-full max-w-lg p-6 relative">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold flex items-center gap-2">
+                    <i data-lucide="file-json" class="w-5 h-5 text-indigo-400"></i>
+                    Import Map Data
+                </h3>
+                <button id="close-import-modal-btn" class="text-gray-400 hover:text-white">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div class="p-4 flex-1 overflow-hidden flex flex-col gap-2">
-                <p class="text-sm text-gray-600">Copy this JSON to backup your map, or paste JSON here to import a saved map.</p>
-                <textarea id="jsonTextarea" class="w-full flex-1 border font-mono text-xs p-3 rounded-md focus:ring-blue-500 focus:border-blue-500 resize-none min-h-[300px]"></textarea>
+            
+            <p class="text-xs text-gray-400 mb-3">Paste your JSON data below or drop a valid JSON file to import.</p>
+            
+            <!-- Drag and Drop Zone / Textarea -->
+            <div id="drop-zone" class="border-2 border-dashed border-gray-600 rounded-lg p-4 bg-gray-900/50 mb-4 transition text-center">
+                <textarea id="json-input" rows="6" class="w-full bg-transparent text-xs text-gray-200 focus:outline-none resize-none font-mono" placeholder='{"nodes": [...], "edges": [...]}'></textarea>
             </div>
-            <div class="p-4 border-t flex justify-between bg-gray-50">
-                <button id="btnCopyJson" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-100 text-sm font-medium transition-colors">
-                    Copy to Clipboard
-                </button>
-                <div class="space-x-2">
-                    <button id="btnImportJson" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium transition-colors">
-                        Import Data
-                    </button>
-                    <button id="btnExportJson" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors">
-                        Generate Export
-                    </button>
-                </div>
+
+            <div class="flex justify-end gap-3">
+                <button id="cancel-import-btn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-sm font-medium rounded-lg transition">Cancel</button>
+                <button id="confirm-import-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-sm font-medium rounded-lg transition">Import Data</button>
             </div>
         </div>
     </div>
 
-    <!-- Main Logic Script -->
+    <!-- App Logic -->
     <script src="app.js"></script>
     <script>
-        // Initialize Lucide icons
-        lucide.createIcons();
+        // Initialize Lucide Icons
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        });
     </script>
 </body>
 </html>
