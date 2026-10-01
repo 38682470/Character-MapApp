@@ -81,11 +81,8 @@ function initNetworkEngine() {
       borderWidthSelected: 6,
       size: 40,
       font: {
-        size: 14,
-        face: 'Inter, system-ui, sans-serif',
-        color: '#1e293b',
-        strokeWidth: 3,
-        strokeColor: '#ffffff'
+        size: 0,              // Suppress default vis-network external label rendering
+        color: 'transparent'  // Hide external text label completely
       },
       shadow: { enabled: true, color: 'rgba(0,0,0,0.1)', size: 8, x: 0, y: 4 }
     },
@@ -98,7 +95,7 @@ function initNetworkEngine() {
     physics: {
       enabled: true,
       solver: 'forceAtlas2Based',
-      forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 140, springConstant: 0.08, damping: 0.4 },
+      forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 300, springConstant: 0.08, damping: 0.4 },
       stabilization: { enabled: true, iterations: 150 }
     },
     interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true }
@@ -109,8 +106,8 @@ function initNetworkEngine() {
   network.on('deselectNode', handleDeselect);
   renderLegend();
 
-  // Wire up Spacing Slider if present
-  const spacingSlider = document.getElementById('input-node-spacing');
+  // Wire up Spacing Slider matching HTML ID #slider-line-spacing
+  const spacingSlider = document.getElementById('slider-line-spacing');
   if (spacingSlider) {
     spacingSlider.addEventListener('input', (e) => {
       const spacing = parseInt(e.target.value, 10);
@@ -153,7 +150,7 @@ function highlightConnectedSubGraph(centralNodeId) {
 
   const updatedNodes = nodesDataSet.get().map(node => {
     const isConnected = connectedNodes.includes(node.id);
-    return { id: node.id, opacity: isConnected ? 1.0 : 0.25, font: { color: isConnected ? '#1e293b' : '#94a3b8' } };
+    return { id: node.id, opacity: isConnected ? 1.0 : 0.25 };
   });
 
   const updatedEdges = edgesDataSet.get().map(edge => {
@@ -166,7 +163,7 @@ function highlightConnectedSubGraph(centralNodeId) {
 }
 
 function resetNodeStyles() {
-  const updatedNodes = nodesDataSet.get().map(node => ({ id: node.id, opacity: 1.0, font: { color: '#1e293b' } }));
+  const updatedNodes = nodesDataSet.get().map(node => ({ id: node.id, opacity: 1.0 }));
   const updatedEdges = edgesDataSet.get().map(edge => ({ id: edge.id, color: { opacity: 1.0 } }));
   nodesDataSet.update(updatedNodes);
   edgesDataSet.update(updatedEdges);
@@ -383,7 +380,7 @@ function populateEditForm(char) {
   setVal('input-char-fontsize', char.fontSize || 26);
   setVal('input-char-role', char.title || '');
   setVal('input-char-bio', char.bio || '');
-  setVal('input-char-avatar', char.image.startsWith('data:image/svg') ? '' : char.image); // Hide generated SVGs from URL field
+  setVal('input-char-avatar', char.image.startsWith('data:image/svg') ? '' : char.image);
 
   document.getElementById('btn-save-character').textContent = 'Update Character';
   document.getElementById('btn-delete-character')?.classList.remove('hidden');
@@ -394,7 +391,6 @@ function resetCharacterForm() {
   document.getElementById('edit-character-id').value = '';
   document.getElementById('form-character')?.reset();
   
-  // Set defaults
   const fontSizeInput = document.getElementById('input-char-fontsize');
   if (fontSizeInput) fontSizeInput.value = 26;
 
@@ -436,7 +432,7 @@ function processFileToBase64(file) {
   const reader = new FileReader();
   reader.onload = (evt) => {
     const urlInput = document.getElementById('input-char-avatar');
-    if (urlInput) urlInput.value = evt.target.result; // Store Base64 directly into the URL input
+    if (urlInput) urlInput.value = evt.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -457,9 +453,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-reset-view')?.addEventListener('click', () => network?.fit({ animation: { duration: 500 } }));
   document.getElementById('btn-clear-selection')?.addEventListener('click', () => { network?.unselectAll(); handleDeselect(); });
 
-  // Drag & Drop / Image File Input
-  const fileInput = document.getElementById('input-char-image-file');
-  const dropZone = document.getElementById('dropzone-avatar');
+  // Drag & Drop / Image File Input mapping correctly to HTML ID #input-char-avatar-file & #avatar-dropzone
+  const fileInput = document.getElementById('input-char-avatar-file');
+  const dropZone = document.getElementById('avatar-dropzone');
 
   if (fileInput) {
     fileInput.addEventListener('change', (e) => {
@@ -488,7 +484,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const avatarUrl = document.getElementById('input-char-avatar').value.trim();
     const bio = document.getElementById('input-char-bio').value.trim();
 
-    // Determine if we use uploaded/URL image or generate a dynamic SVG
     const isImageAvailable = avatarUrl !== '' && !avatarUrl.startsWith('data:image/svg');
     const imageSrc = isImageAvailable ? avatarUrl : createDynamicAvatarSVG(name, shortName, fontSize);
 
