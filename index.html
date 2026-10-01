@@ -264,7 +264,7 @@
   <!-- Load Main Logic -->
   <script src="app.js"></script>
   <script>
-  // --- ROBUST MODAL IMPORT LOGIC ---
+  // --- ULTRA-FLEXIBLE MODAL IMPORT LOGIC ---
   document.addEventListener('DOMContentLoaded', () => {
       const importBtn = document.getElementById('btn-open-import-modal');
       const modal = document.getElementById('modal-import-json');
@@ -312,19 +312,29 @@
               try {
                   const parsedData = JSON.parse(jsonStr);
                   
-                  // Support both explicit {nodes, edges} and top-level arrays or alternative keys
-                  let nodesData = parsedData.nodes || parsedData.characters || (Array.isArray(parsedData) ? parsedData : null);
-                  let edgesData = parsedData.edges || parsedData.relationships || parsedData.links || [];
+                  let nodesData = [];
+                  let edgesData = [];
 
-                  if (nodesData && typeof nodes !== 'undefined' && typeof edges !== 'undefined') {
+                  if (Array.isArray(parsedData)) {
+                      // Flat array inspection
+                      nodesData = parsedData.filter(item => item.id !== undefined || (item.label !== undefined && item.from === undefined));
+                      edgesData = parsedData.filter(item => item.from !== undefined && item.to !== undefined);
+                  } else if (typeof parsedData === 'object' && parsedData !== null) {
+                      nodesData = parsedData.nodes || parsedData.characters || parsedData.items || [];
+                      edgesData = parsedData.edges || parsedData.relationships || parsedData.links || [];
+                  }
+
+                  if (nodesData.length > 0 && typeof nodes !== 'undefined' && typeof edges !== 'undefined') {
                       nodes.clear();
                       edges.clear();
                       nodes.add(nodesData);
-                      edges.add(edgesData);
+                      if (edgesData.length > 0) {
+                          edges.add(edgesData);
+                      }
                       alert("Network data imported successfully!");
                       closeModal();
                   } else {
-                      alert("Import failed: JSON must contain a 'nodes' or character array.");
+                      alert("Import failed: Could not find any valid character nodes in the JSON structure.");
                   }
               } catch (err) {
                   alert("Invalid JSON: " + err.message);
