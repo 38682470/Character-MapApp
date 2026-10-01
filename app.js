@@ -1,7 +1,7 @@
 /**
  * DYNAMIC CHARACTER NETWORK MAP - COMPLETE APPLICATION LOGIC
  * Features: Multi-Map Manager, Physics Spacing, Drag-and-Drop Image Conversion, 
- * Auto-Wrapping SVGs with Bottom-Banner Photo Text Overlay, Forms, LocalStorage Persistence.
+ * Auto-Wrapping SVGs with Bottom-Banner Photo Text Overlay, JSON Import/Export, Forms, LocalStorage.
  */
 
 // --- GLOBAL STATE & CONFIGURATION ---
@@ -27,18 +27,11 @@ let mapRegistry = [];
 // Default Sample Character Data
 const DEFAULT_CHARACTERS = [
   { id: '1', label: 'Jean Valjean', shortName: 'Valjean', fontSize: 24, title: 'Protagonist', bio: 'Former convict striving for redemption and moral integrity.', shape: 'circularImage', image: '', color: { border: '#0284c7' } },
-  { id: '2', label: 'Javert', shortName: 'Javert', fontSize: 26, title: 'Inspector / Authority', bio: 'Unforgiving police inspector dedicated to rigid law and justice.', shape: 'circularImage', image: '', color: { border: '#f97316' } },
-  { id: '3', label: 'Marius', shortName: 'Marius', fontSize: 26, title: 'Lead Male', bio: 'Idealistic student revolutionary deeply in love with Cosette.', shape: 'circularImage', image: '', color: { border: '#a855f7' } },
-  { id: '4', label: 'Cosette', shortName: 'Cosette', fontSize: 26, title: 'Love Interest / Daughter', bio: "Fantine's daughter, raised by Jean Valjean as his own.", shape: 'circularImage', image: '', color: { border: '#84cc16' } },
-  { id: '5', label: 'Éponine', shortName: 'Éponine', fontSize: 24, title: 'Tragic Heroine', bio: 'Secretly loves Marius and sacrifices herself at the barricades.', shape: 'circularImage', image: '', color: { border: '#ef4444' } }
+  { id: '2', label: 'Javert', shortName: 'Javert', fontSize: 26, title: 'Inspector / Authority', bio: 'Unforgiving police inspector dedicated to rigid law and justice.', shape: 'circularImage', image: '', color: { border: '#f97316' } }
 ];
 
 const DEFAULT_RELATIONSHIPS = [
-  { id: 'e1', from: '1', to: '2', label: 'Rival/Enemy', type: 'Rival/Enemy', color: { color: REL_COLORS['Rival/Enemy'] } },
-  { id: 'e2', from: '1', to: '4', label: 'Family (Father)', type: 'Family', color: { color: REL_COLORS['Family'] } },
-  { id: 'e3', from: '3', to: '4', label: 'Romantic', type: 'Romantic', color: { color: REL_COLORS['Romantic'] } },
-  { id: 'e4', from: '3', to: '5', label: 'Ally/Friend', type: 'Ally/Friend', color: { color: REL_COLORS['Ally/Friend'] } },
-  { id: 'e5', from: '2', to: '1', label: 'Authority/Power', type: 'Authority/Power', color: { color: REL_COLORS['Authority/Power'] } }
+  { id: 'e1', from: '1', to: '2', label: 'Rival/Enemy', type: 'Rival/Enemy', color: { color: REL_COLORS['Rival/Enemy'] } }
 ];
 
 // --- DYNAMIC SVG GENERATOR (Photo with Bottom-Third Text Banner) ---
@@ -50,7 +43,7 @@ function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6
   let textElement = '';
 
   if (hasPhoto) {
-    // If photo is present, place image across the circle, add a bottom banner, and position text in the bottom third
+    // Photo present: Position text safely inside the dark bottom banner (approx y: 72 to 92)
     if (displayText.length > 9 && displayText.includes(' ')) {
       const words = displayText.split(' ');
       const mid = Math.ceil(words.length / 2);
@@ -58,11 +51,11 @@ function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6
       const line2 = words.slice(mid).join(' ');
 
       textElement = `
-        <text x="50" y="73" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.85}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line1}</text>
-        <text x="50" y="90" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.85}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line2}</text>
+        <text x="50" y="73" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.75}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line1}</text>
+        <text x="50" y="89" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.75}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${line2}</text>
       `;
     } else {
-      textElement = `<text x="50" y="82" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${displayText}</text>`;
+      textElement = `<text x="50" y="81" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.9}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke fill">${displayText}</text>`;
     }
 
     visualContent = `
@@ -74,7 +67,7 @@ function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6
       <circle cx="50" cy="50" r="48" fill="${color}" />
       <image href="${avatarUrl}" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice" clip-path="url(#circleClip)" />
       <!-- Dark bottom banner gradient for crystal-clear name readability -->
-      <path d="M 2 62 Q 50 58 98 62 L 98 96 A 48 48 0 0 1 2 96 Z" fill="rgba(0, 0, 0, 0.75)" clip-path="url(#circleClip)" />
+      <path d="M 2 62 Q 50 58 98 62 L 98 96 A 48 48 0 0 1 2 96 Z" fill="rgba(0, 0, 0, 0.78)" clip-path="url(#circleClip)" />
     `;
   } else {
     // Standard centered text for nodes without photos
@@ -114,10 +107,7 @@ function initNetworkEngine() {
       borderWidth: 4,
       borderWidthSelected: 6,
       size: 40,
-      font: {
-        size: 0,
-        color: 'transparent'
-      },
+      font: { size: 0, color: 'transparent' },
       shadow: { enabled: true, color: 'rgba(0,0,0,0.1)', size: 8, x: 0, y: 4 }
     },
     edges: {
@@ -139,16 +129,6 @@ function initNetworkEngine() {
   network.on('click', handleNodeClick);
   network.on('deselectNode', handleDeselect);
   renderLegend();
-
-  const spacingSlider = document.getElementById('slider-line-spacing');
-  if (spacingSlider) {
-    spacingSlider.addEventListener('input', (e) => {
-      const spacing = parseInt(e.target.value, 10);
-      if (!isNaN(spacing)) {
-        network.setOptions({ physics: { forceAtlas2Based: { springLength: spacing } } });
-      }
-    });
-  }
 }
 
 // --- NODE CENTERING & HIGHLIGHTING ENGINE ---
@@ -253,6 +233,7 @@ function loadMapData(mapId) {
     edges = parsed.edges || [];
   }
 
+  // Ensure fresh dynamic SVGs are rendered with bottom banner on load
   nodes = nodes.map(n => {
     n.fontSize = n.fontSize || 26;
     n.image = createDynamicAvatarSVG(n.label, n.shortName, n.fontSize, n.color?.border || '#6366f1', n.rawAvatar || n.image);
@@ -456,7 +437,7 @@ function renderLegend() {
   });
 }
 
-// --- DRAG, DROP & FILE READER ENGINE (Base64 conversion) ---
+// --- DRAG, DROP & FILE READER ENGINE ---
 function processFileToBase64(file) {
   if (!file || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
@@ -501,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Character Form Submission (Generates SVG with bottom-banner text overlay)
+  // Character Form Submission
   document.getElementById('form-character')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const editId = document.getElementById('edit-character-id').value;
@@ -589,6 +570,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.target.reset();
   });
 
+  // --- EXPORT & IMPORT JSON HANDLERS ---
   document.getElementById('btn-export-json')?.addEventListener('click', () => {
     const currentMap = mapRegistry.find(m => m.id === activeMapId);
     const blob = new Blob([JSON.stringify({ mapName: currentMap?.name || 'Map', characters: nodesDataSet.get(), relationships: edgesDataSet.get() }, null, 2)], { type: 'application/json' });
@@ -598,6 +580,34 @@ document.addEventListener('DOMContentLoaded', () => {
     a.download = `${(currentMap?.name || 'map').toLowerCase().replace(/[^a-z0-9]/g, '_')}_backup.json`;
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('btn-import-json')?.addEventListener('click', () => {
+    const jsonString = prompt('Paste your exported JSON map backup data below:');
+    if (!jsonString || jsonString.trim() === '') return;
+
+    try {
+      const parsed = JSON.parse(jsonString);
+      const importedNodes = parsed.characters || parsed.nodes || [];
+      const importedEdges = parsed.relationships || parsed.edges || [];
+      const mapName = parsed.mapName || 'Imported Map';
+
+      const newId = 'map_' + Date.now();
+      mapRegistry.push({ id: newId, name: mapName });
+      
+      localStorage.setItem(`char_map_data_${newId}`, JSON.stringify({
+        nodes: importedNodes,
+        edges: importedEdges
+      }));
+      localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
+
+      renderMapDropdown();
+      loadMapData(newId);
+      alert(`Successfully imported "${mapName}" with ${importedNodes.length} characters!`);
+    } catch (err) {
+      alert('Invalid JSON format. Please check your data and try again.');
+      console.error(err);
+    }
   });
 
   if (window.lucide) lucide.createIcons();
