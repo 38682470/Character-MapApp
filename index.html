@@ -77,10 +77,9 @@
         <button id="btn-export-json" class="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
           <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
         </button>
-        <label class="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer transition-colors">
+        <button id="btn-open-import-modal" class="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
           <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import JSON
-          <input type="file" id="input-import-json" accept=".json" class="hidden">
-        </label>
+        </button>
       </div>
     </div>
 
@@ -120,7 +119,7 @@
         </div>
       </div>
 
-      <!-- Lower Section: Form Drawer (Add / Edit Controls strictly placed below) -->
+      <!-- Lower Section: Form Drawer -->
       <div class="flex-1 p-6 overflow-y-auto bg-white space-y-6">
         
         <!-- Form Header Toggle -->
@@ -206,6 +205,36 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- JSON Copy-Paste Import Modal -->
+  <div id="modal-import-json" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-[550px] max-w-[90vw] p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-bold text-slate-800">Import Character Map JSON</h3>
+        <button id="btn-close-import-modal" class="text-slate-400 hover:text-slate-600 transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Paste JSON Code Below:</label>
+        <textarea id="textarea-import-json" rows="10" placeholder="Paste your generated JSON here..." class="w-full text-xs font-mono p-3 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"></textarea>
+      </div>
+      <div class="flex items-center justify-between gap-3 pt-2">
+        <label class="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer">
+          <i data-lucide="file-up" class="w-3.5 h-3.5"></i> Or choose a .json file
+          <input type="file" id="input-import-json-file" accept=".json" class="hidden">
+        </label>
+        <div class="flex items-center gap-2">
+          <button id="btn-cancel-import" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button id="btn-submit-import-json" class="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-xs">
+            Import Data
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Load Main Logic -->
