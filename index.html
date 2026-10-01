@@ -4,97 +4,186 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Character Network Map</title>
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Vis-Network CDN -->
+    <!-- Vis Network CDN -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-    <!-- Lucide Icons -->
+    <!-- Lucide Icons CDN -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Custom Styles -->
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        #network-container {
+            height: 650px;
+            width: 100%;
+        }
+    </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col font-sans">
 
-    <!-- Top Navigation / Controls Bar -->
+    <!-- Top Navigation Bar -->
     <header class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center space-x-3">
             <i data-lucide="share-2" class="w-6 h-6 text-indigo-400"></i>
             <h1 class="text-xl font-bold tracking-wide">Character Network Map</h1>
         </div>
 
-        <div class="flex items-center gap-4 flex-wrap">
-            <!-- Multi-Map Selector -->
-            <div class="flex items-center gap-2">
-                <label for="map-select" class="text-sm font-medium text-gray-300">Map:</label>
-                <select id="map-select" class="bg-gray-700 text-white text-sm rounded-lg border border-gray-600 px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <div class="flex items-center space-x-6 text-sm">
+            <div class="flex items-center space-x-2">
+                <span class="text-gray-400">Map:</span>
+                <select id="map-select" class="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="default">Default Network</option>
                 </select>
-                <button id="add-map-btn" title="Add New Map" class="p-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                </button>
+                <button id="add-map-btn" class="bg-indigo-600 hover:bg-indigo-500 px-2.5 py-1.5 rounded text-white font-bold">+</button>
             </div>
 
-            <!-- Physics / Node Spacing Slider -->
-            <div class="flex items-center gap-2 bg-gray-700/50 px-3 py-1.5 rounded-lg border border-gray-600">
-                <i data-lucide="sliders" class="w-4 h-4 text-gray-400"></i>
-                <label for="node-spacing-slider" class="text-xs font-medium text-gray-300">Spacing:</label>
-                <input type="range" id="node-spacing-slider" min="50" max="400" value="150" class="w-24 accent-indigo-500 cursor-pointer">
+            <div class="flex items-center space-x-2">
+                <span class="text-gray-400">Spacing:</span>
+                <input id="node-spacing-slider" type="range" min="50" max="300" value="150" class="cursor-pointer accent-indigo-500">
             </div>
 
-            <!-- Import / Export Actions -->
-            <div class="flex items-center gap-2">
-                <button id="open-import-modal-btn" class="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-sm font-medium transition">
-                    <i data-lucide="upload" class="w-4 h-4 text-indigo-400"></i>
-                    Import JSON
+            <div class="flex items-center space-x-3">
+                <button id="open-import-modal-btn" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded border border-gray-600 flex items-center space-x-1">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span>Import JSON</span>
                 </button>
-                <button id="export-json-btn" class="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-sm font-medium transition">
-                    <i data-lucide="download" class="w-4 h-4 text-green-400"></i>
-                    Export JSON
+                <button id="export-json-btn" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded border border-gray-600 flex items-center space-x-1">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span>Export JSON</span>
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- Main Workspace -->
-    <main class="flex-1 relative overflow-hidden flex">
-        <!-- Vis-Network Graph Container -->
-        <div id="network-container" class="w-full h-full min-h-[calc(100vh-80px)] bg-gray-950"></div>
+    <!-- Canvas Area -->
+    <main class="flex-1 p-6 flex flex-col">
+        <div id="network-container" class="bg-gray-950 border border-gray-800 rounded-xl shadow-2xl relative overflow-hidden"></div>
     </main>
 
-    <!-- In-App JSON Import Modal -->
-    <div id="import-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-        <div class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl w-full max-w-lg p-6 relative">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold flex items-center gap-2">
-                    <i data-lucide="file-json" class="w-5 h-5 text-indigo-400"></i>
-                    Import Map Data
-                </h3>
-                <button id="close-import-modal-btn" class="text-gray-400 hover:text-white">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
+    <!-- Import Modal -->
+    <div id="import-modal" class="fixed inset-0 bg-black/70 hidden items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 border border-gray-700 rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3">
+                <h3 class="text-lg font-bold">Import Character Data</h3>
+                <button id="close-import-modal-btn" class="text-gray-400 hover:text-white">&times;</button>
             </div>
             
-            <p class="text-xs text-gray-400 mb-3">Paste your JSON data below or drop a valid JSON file to import.</p>
-            
-            <!-- Drag and Drop Zone / Textarea -->
-            <div id="drop-zone" class="border-2 border-dashed border-gray-600 rounded-lg p-4 bg-gray-900/50 mb-4 transition text-center">
-                <textarea id="json-input" rows="6" class="w-full bg-transparent text-xs text-gray-200 focus:outline-none resize-none font-mono" placeholder='{"nodes": [...], "edges": [...]}'></textarea>
+            <div id="drop-zone" class="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center text-gray-400 hover:border-indigo-500 cursor-pointer">
+                Drag & Drop JSON file here or paste data below
             </div>
 
-            <div class="flex justify-end gap-3">
-                <button id="cancel-import-btn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-sm font-medium rounded-lg transition">Cancel</button>
-                <button id="confirm-import-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-sm font-medium rounded-lg transition">Import Data</button>
+            <textarea id="json-input" rows="5" class="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm font-mono text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder='{"nodes": [...], "edges": [...]}'></textarea>
+
+            <div class="flex justify-end space-x-3 pt-2">
+                <button id="cancel-import-btn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm">Cancel</button>
+                <button id="confirm-import-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm font-semibold">Load Network</button>
             </div>
         </div>
     </div>
 
-    <!-- App Logic -->
-    <script src="app.js"></script>
+    <!-- Application Logic -->
     <script>
-        // Initialize Lucide Icons
         document.addEventListener('DOMContentLoaded', () => {
+            // Render Lucide Icons
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
+            }
+
+            const container = document.getElementById('network-container');
+            const mapSelect = document.getElementById('map-select');
+            const addMapBtn = document.getElementById('add-map-btn');
+            const spacingSlider = document.getElementById('node-spacing-slider');
+            const openImportBtn = document.getElementById('open-import-modal-btn');
+            const exportBtn = document.getElementById('export-json-btn');
+            
+            const importModal = document.getElementById('import-modal');
+            const closeImportBtn = document.getElementById('close-import-modal-btn');
+            const cancelImportBtn = document.getElementById('cancel-import-btn');
+            const confirmImportBtn = document.getElementById('confirm-import-btn');
+            const jsonInput = document.getElementById('json-input');
+
+            // Default Data Setup
+            const nodes = new vis.DataSet([
+                { id: 1, label: 'Protagonist', shape: 'ellipse', color: '#6366f1', font: { color: '#ffffff' } },
+                { id: 2, label: 'Mentor', shape: 'ellipse', color: '#10b981', font: { color: '#ffffff' } },
+                { id: 3, label: 'Antagonist', shape: 'ellipse', color: '#ef4444', font: { color: '#ffffff' } }
+            ]);
+
+            const edges = new vis.DataSet([
+                { from: 1, to: 2, label: 'Guided by', color: { color: '#94a3b8' } },
+                { from: 1, to: 3, label: 'Opposes', color: { color: '#f87171' } }
+            ]);
+
+            const options = {
+                nodes: { borderWidth: 2, shadow: true },
+                edges: { width: 2, shadow: true, smooth: { type: 'continuous' } },
+                physics: {
+                    solver: 'forceAtlas2Based',
+                    forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 150, springConstant: 0.08 }
+                },
+                interaction: { hover: true, navigationButtons: true, keyboard: true }
+            };
+
+            // Initialize Vis Network
+            let network = null;
+            if (container && typeof vis !== 'undefined') {
+                network = new vis.Network(container, { nodes, edges }, options);
+            }
+
+            // Controls
+            if (spacingSlider && network) {
+                spacingSlider.addEventListener('input', (e) => {
+                    network.setOptions({ physics: { forceAtlas2Based: { springLength: parseInt(e.target.value, 10) } } });
+                });
+            }
+
+            const showModal = () => importModal.classList.remove('hidden'), importModal.classList.add('flex');
+            const hideModal = () => importModal.classList.add('hidden'), importModal.classList.remove('flex');
+
+            if (openImportBtn) openImportBtn.addEventListener('click', showModal);
+            if (closeImportBtn) closeImportBtn.addEventListener('click', hideModal);
+            if (cancelImportBtn) cancelImportBtn.addEventListener('click', hideModal);
+
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => {
+                    const exportData = { nodes: nodes.get(), edges: edges.get() };
+                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = 'character-network.json';
+                    a.click();
+                });
+            }
+
+            if (confirmImportBtn) {
+                confirmImportBtn.addEventListener('click', () => {
+                    const rawVal = jsonInput ? jsonInput.value.trim() : '';
+                    if (!rawVal) return;
+                    try {
+                        const parsed = JSON.parse(rawVal);
+                        if (parsed.nodes && parsed.edges) {
+                            nodes.clear();
+                            edges.clear();
+                            nodes.add(parsed.nodes);
+                            edges.add(parsed.edges);
+                            hideModal();
+                            jsonInput.value = '';
+                        }
+                    } catch (err) {
+                        alert('Invalid JSON: ' + err.message);
+                    }
+                });
+            }
+
+            if (addMapBtn && mapSelect) {
+                addMapBtn.addEventListener('click', () => {
+                    const name = prompt('Enter map name:');
+                    if (name) {
+                        const opt = document.createElement('option');
+                        opt.value = name.toLowerCase().replace(/\s+/g, '-');
+                        opt.textContent = name;
+                        mapSelect.appendChild(opt);
+                        mapSelect.value = opt.value;
+                    }
+                });
             }
         });
     </script>
