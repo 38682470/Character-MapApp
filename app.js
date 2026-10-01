@@ -1,694 +1,592 @@
 /**
- * DYNAMIC CHARACTER NETWORK MAP - COMPLETE APPLICATION LOGIC
- * Features: Multi-Map Manager, Physics Spacing, Drag-and-Drop Image Conversion, 
- * Transparent Lower-Third Text Outlines, JSON Modal Import/Export, Forms, LocalStorage.
+ * StoryGraph Studio - Application Logic
+ * Manages vis-network character maps, local storage persistence,
+ * UI state, character inspector, relationship linking, and map switching.
  */
 
-// --- GLOBAL STATE & CONFIGURATION ---
-const REGISTRY_KEY = 'char_map_registry_v1';
-const ACTIVE_MAP_KEY = 'char_map_active_id_v1';
-
-const REL_COLORS = {
-  'Ally/Friend': '#84cc16',      // Green
-  'Authority/Power': '#f97316',  // Orange
-  'Family': '#0284c7',           // Blue
-  'Rival/Enemy': '#ef4444',      // Red
-  'Romantic': '#a855f7',         // Purple
-  'Other': '#64748b'             // Gray
-};
-
-let network = null;
-let nodesDataSet = new vis.DataSet([]);
-let edgesDataSet = new vis.DataSet([]);
-let selectedNodeId = null;
-let activeMapId = null;
-let mapRegistry = [];
-
-// Default Sample Character Data
-const DEFAULT_CHARACTERS = [
-  { id: '1', label: 'Jean Valjean', shortName: 'Valjean', fontSize: 24, title: 'Protagonist', bio: 'Former convict striving for redemption and moral integrity.', shape: 'circularImage', image: '', color: { border: '#0284c7' } },
-  { id: '2', label: 'Javert', shortName: 'Javert', fontSize: 26, title: 'Inspector / Authority', bio: 'Unforgiving police inspector dedicated to rigid law and justice.', shape: 'circularImage', image: '', color: { border: '#f97316' } }
-];
-
-const DEFAULT_RELATIONSHIPS = [
-  { id: 'e1', from: '1', to: '2', label: 'Rival/Enemy', type: 'Rival/Enemy', color: { color: REL_COLORS['Rival/Enemy'] } }
-];
-
-// --- DYNAMIC SVG GENERATOR (Transparent Lower-Third Outlined Text) ---
-function createDynamicAvatarSVG(name, shortName = '', fontSize = 24, color = '#6366f1', avatarUrl = '') {
-  const displayText = (shortName || name).trim();
-  const hasPhoto = avatarUrl && avatarUrl.trim() !== '' && !avatarUrl.startsWith('data:image/svg');
-
-  let visualContent = '';
-  let textElement = '';
-
-  if (hasPhoto) {
-    // Photo present: Position text in the lower third with 100% transparent background and crisp stroke outline
-    if (displayText.length > 9 && displayText.includes(' ')) {
-      const words = displayText.split(' ');
-      const mid = Math.ceil(words.length / 2);
-      const line1 = words.slice(0, mid).join(' ');
-      const line2 = words.slice(mid).join(' ');
-
-      textElement = `
-        <text x="50" y="73" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.75}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3.5" paint-order="stroke fill">${line1}</text>
-        <text x="50" y="89" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.75}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3.5" paint-order="stroke fill">${line2}</text>
-      `;
-    } else {
-      textElement = `<text x="50" y="82" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize * 0.9}" font-family="sans-serif" font-weight="bold" fill="#ffffff" stroke="#000000" stroke-width="3.5" paint-order="stroke fill">${displayText}</text>`;
-    }
-
-    visualContent = `
-      <defs>
-        <clipPath id="circleClip">
-          <circle cx="50" cy="50" r="48" />
-        </clipPath>
-      </defs>
-      <circle cx="50" cy="50" r="48" fill="${color}" />
-      <image href="${avatarUrl}" x="0" y="0" width="100" height="100" preserveAspectRatio="xMidYMid slice" clip-path="url(#circleClip)" />
-    `;
-  } else {
-    // Standard centered text for nodes without photos
-    if (displayText.length > 7 && displayText.includes(' ')) {
-      const words = displayText.split(' ');
-      const mid = Math.ceil(words.length / 2);
-      const line1 = words.slice(0, mid).join(' ');
-      const line2 = words.slice(mid).join(' ');
-
-      textElement = `
-        <text x="50" y="${50 - (fontSize * 0.4)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${line1}</text>
-        <text x="50" y="${50 + (fontSize * 0.6)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${line2}</text>
-      `;
-    } else {
-      textElement = `<text x="50" y="52" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${displayText}</text>`;
-    }
-
-    visualContent = `<circle cx="50" cy="50" r="48" fill="${color}" />`;
-  }
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="100" height="100" viewBox="0 0 100 100">
-    ${visualContent}
-    ${textElement}
-  </svg>`;
-
-  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-}
-
-// --- VIS-NETWORK GRAPH ENGINE ---
-function initNetworkEngine() {
-  const container = document.getElementById('character-network');
-  const data = { nodes: nodesDataSet, edges: edgesDataSet };
-
-  const options = {
-    nodes: {
-      shape: 'circularImage',
-      borderWidth: 4,
-      borderWidthSelected: 6,
-      size: 40,
-      font: { size: 0, color: 'transparent' },
-      shadow: { enabled: true, color: 'rgba(0,0,0,0.1)', size: 8, x: 0, y: 4 }
-    },
-    edges: {
-      width: 3,
-      selectionWidth: 5,
-      smooth: { type: 'continuous', roundness: 0.2 },
-      font: { size: 11, align: 'middle', background: '#ffffff', strokeWidth: 0 }
-    },
-    physics: {
-      enabled: true,
-      solver: 'forceAtlas2Based',
-      forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 300, springConstant: 0.08, damping: 0.4 },
-      stabilization: { enabled: true, iterations: 150 }
-    },
-    interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true }
-  };
-
-  network = new vis.Network(container, data, options);
-  network.on('click', handleNodeClick);
-  network.on('deselectNode', handleDeselect);
-  renderLegend();
-
-  // Restore line spacing slider event listener
-  const spacingSlider = document.getElementById('slider-line-spacing');
-  if (spacingSlider) {
-    spacingSlider.addEventListener('input', (e) => {
-      const spacing = parseInt(e.target.value, 10);
-      if (!isNaN(spacing)) {
-        network.setOptions({ physics: { forceAtlas2Based: { springLength: spacing } } });
-      }
-    });
-  }
-}
-
-// --- NODE CENTERING & HIGHLIGHTING ENGINE ---
-function handleNodeClick(params) {
-  if (params.nodes.length > 0) {
-    const nodeId = params.nodes[0];
-    selectedNodeId = nodeId;
-
-    network.focus(nodeId, {
-      scale: 1.1,
-      animation: { duration: 600, easingFunction: 'easeInOutQuad' }
-    });
-
-    highlightConnectedSubGraph(nodeId);
-    document.getElementById('btn-clear-selection')?.classList.remove('hidden');
-    updateInspector(nodeId);
-  } else {
-    handleDeselect();
-  }
-}
-
-function handleDeselect() {
-  selectedNodeId = null;
-  resetNodeStyles();
-  document.getElementById('btn-clear-selection')?.classList.add('hidden');
-  clearInspector();
-}
-
-function highlightConnectedSubGraph(centralNodeId) {
-  const connectedNodes = network.getConnectedNodes(centralNodeId);
-  connectedNodes.push(centralNodeId);
-
-  const updatedNodes = nodesDataSet.get().map(node => {
-    const isConnected = connectedNodes.includes(node.id);
-    return { id: node.id, opacity: isConnected ? 1.0 : 0.25 };
-  });
-
-  const updatedEdges = edgesDataSet.get().map(edge => {
-    const isConnected = edge.from === centralNodeId || edge.to === centralNodeId;
-    return { id: edge.id, color: { opacity: isConnected ? 1.0 : 0.15 } };
-  });
-
-  nodesDataSet.update(updatedNodes);
-  edgesDataSet.update(updatedEdges);
-}
-
-function resetNodeStyles() {
-  const updatedNodes = nodesDataSet.get().map(node => ({ id: node.id, opacity: 1.0 }));
-  const updatedEdges = edgesDataSet.get().map(edge => ({ id: edge.id, color: { opacity: 1.0 } }));
-  nodesDataSet.update(updatedNodes);
-  edgesDataSet.update(updatedEdges);
-}
-
-// --- MULTI-MAP MANAGER & PERSISTENCE ---
-function initMapRegistry() {
-  const rawRegistry = localStorage.getItem(REGISTRY_KEY);
-  
-  if (rawRegistry) {
-    mapRegistry = JSON.parse(rawRegistry);
-  } else {
-    const defaultId = 'map_default';
-    mapRegistry = [{ id: defaultId, name: 'Les Misérables' }];
-    localStorage.setItem(`char_map_data_${defaultId}`, JSON.stringify({
-      nodes: DEFAULT_CHARACTERS,
-      edges: DEFAULT_RELATIONSHIPS
-    }));
-    localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
-  }
-
-  const savedActiveId = localStorage.getItem(ACTIVE_MAP_KEY);
-  activeMapId = (savedActiveId && mapRegistry.some(m => m.id === savedActiveId)) ? savedActiveId : mapRegistry[0].id;
-
-  renderMapDropdown();
-  loadMapData(activeMapId);
-}
-
-function renderMapDropdown() {
-  const select = document.getElementById('select-active-map');
-  if (!select) return;
-  select.innerHTML = '';
-
-  mapRegistry.forEach(map => {
-    const opt = document.createElement('option');
-    opt.value = map.id;
-    opt.textContent = map.name;
-    if (map.id === activeMapId) opt.selected = true;
-    select.appendChild(opt);
-  });
-}
-
-function loadMapData(mapId) {
-  activeMapId = mapId;
-  localStorage.setItem(ACTIVE_MAP_KEY, mapId);
-
-  const rawData = localStorage.getItem(`char_map_data_${mapId}`);
-  let nodes = [];
-  let edges = [];
-
-  if (rawData) {
-    const parsed = JSON.parse(rawData);
-    nodes = parsed.nodes || [];
-    edges = parsed.edges || [];
-  }
-
-  nodes = nodes.map(n => {
-    n.fontSize = n.fontSize || 26;
-    n.image = createDynamicAvatarSVG(n.label, n.shortName, n.fontSize, n.color?.border || '#6366f1', n.rawAvatar || n.image);
-    return n;
-  });
-
-  nodesDataSet.clear();
-  edgesDataSet.clear();
-  nodesDataSet.add(nodes);
-  edgesDataSet.add(edges);
-
-  handleDeselect();
-  updateCounters();
-  updateTargetDropdown();
-  if (network) network.fit({ animation: { duration: 400 } });
-}
-
-function saveDataToLocalStorage() {
-  if (!activeMapId) return;
-  localStorage.setItem(`char_map_data_${activeMapId}`, JSON.stringify({
-    nodes: nodesDataSet.get(),
-    edges: edgesDataSet.get()
-  }));
-  localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
-  updateCounters();
-}
-
-function createNewMap() {
-  const mapName = prompt('Enter the title of the book or character map:', 'New Book Map');
-  if (!mapName || mapName.trim() === '') return;
-
-  const newId = 'map_' + Date.now();
-  mapRegistry.push({ id: newId, name: mapName.trim() });
-  
-  localStorage.setItem(`char_map_data_${newId}`, JSON.stringify({ nodes: [], edges: [] }));
-  localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
-
-  renderMapDropdown();
-  loadMapData(newId);
-}
-
-function renameActiveMap() {
-  const currentMap = mapRegistry.find(m => m.id === activeMapId);
-  if (!currentMap) return;
-
-  const newName = prompt('Enter new title for this map:', currentMap.name);
-  if (!newName || newName.trim() === '') return;
-
-  currentMap.name = newName.trim();
-  saveDataToLocalStorage();
-  renderMapDropdown();
-}
-
-function deleteActiveMap() {
-  if (mapRegistry.length <= 1) {
-    alert('You must keep at least one character map.');
-    return;
-  }
-
-  const currentMap = mapRegistry.find(m => m.id === activeMapId);
-  if (confirm(`Are you sure you want to delete "${currentMap.name}"?`)) {
-    localStorage.removeItem(`char_map_data_${activeMapId}`);
-    mapRegistry = mapRegistry.filter(m => m.id !== activeMapId);
-    activeMapId = mapRegistry[0].id;
-    saveDataToLocalStorage();
-    renderMapDropdown();
-    loadMapData(activeMapId);
-  }
-}
-
-function updateCounters() {
-  const statChars = document.getElementById('stat-characters');
-  const statRels = document.getElementById('stat-relationships');
-  if (statChars) statChars.textContent = nodesDataSet.length;
-  if (statRels) statRels.textContent = edgesDataSet.length;
-}
-
-// --- INSPECTOR SIDEBAR LOGIC ---
-function updateInspector(nodeId) {
-  const char = nodesDataSet.get(nodeId);
-  if (!char) return;
-
-  document.getElementById('inspector-empty-state')?.classList.add('hidden');
-  document.getElementById('inspector-content')?.classList.remove('hidden');
-
-  const avatarEl = document.getElementById('inspector-avatar');
-  if (avatarEl) avatarEl.src = char.rawAvatar || (char.image.startsWith('data:image/svg') ? '' : char.image);
-  
-  const nameEl = document.getElementById('inspector-name');
-  if (nameEl) nameEl.textContent = char.label;
-
-  const roleEl = document.getElementById('inspector-archetype');
-  if (roleEl) roleEl.textContent = char.title || 'Character';
-
-  const descEl = document.getElementById('inspector-description');
-  if (descEl) descEl.textContent = char.bio || 'No overview notes available.';
-
-  const connectedEdges = edgesDataSet.get({ filter: e => e.from === nodeId || e.to === nodeId });
-  const relListContainer = document.getElementById('inspector-relationships-list');
-  
-  if (relListContainer) {
-    relListContainer.innerHTML = '';
-    if (connectedEdges.length === 0) {
-      relListContainer.innerHTML = '<p class="text-xs text-slate-400 italic">No connected relationships yet.</p>';
-    } else {
-      connectedEdges.forEach(edge => {
-        const targetId = edge.from === nodeId ? edge.to : edge.from;
-        const targetChar = nodesDataSet.get(targetId);
-        if (!targetChar) return;
-
-        const relColor = REL_COLORS[edge.type] || '#64748b';
-        const item = document.createElement('div');
-        item.className = 'flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 shadow-2xs text-xs';
-        item.innerHTML = `
-          <div class="flex items-center gap-2">
-            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${relColor}"></span>
-            <span class="font-semibold text-slate-700">${targetChar.label}</span>
-            <span class="text-slate-400">(${edge.label || edge.type})</span>
-          </div>
-          <button class="btn-delete-edge text-slate-300 hover:text-rose-500 transition-colors" data-edge-id="${edge.id}" title="Remove relationship">
-            <i data-lucide="x" class="w-4 h-4"></i>
-          </button>
-        `;
-        relListContainer.appendChild(item);
-      });
-
-      relListContainer.querySelectorAll('.btn-delete-edge').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          edgesDataSet.remove(e.currentTarget.getAttribute('data-edge-id'));
-          saveDataToLocalStorage();
-          updateInspector(nodeId);
-          if (selectedNodeId) highlightConnectedSubGraph(selectedNodeId);
-        });
-      });
-    }
-  }
-
-  populateEditForm(char);
-  if (window.lucide) lucide.createIcons();
-}
-
-function clearInspector() {
-  document.getElementById('inspector-empty-state')?.classList.remove('hidden');
-  document.getElementById('inspector-content')?.classList.add('hidden');
-  resetCharacterForm();
-}
-
-function populateEditForm(char) {
-  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
-  
-  document.getElementById('form-title').textContent = 'Edit Character';
-  setVal('edit-character-id', char.id);
-  setVal('input-char-name', char.label);
-  setVal('input-char-shortname', char.shortName || '');
-  setVal('input-char-fontsize', char.fontSize || 26);
-  setVal('input-char-role', char.title || '');
-  setVal('input-char-bio', char.bio || '');
-  setVal('input-char-avatar', char.rawAvatar || '');
-
-  document.getElementById('btn-save-character').textContent = 'Update Character';
-  document.getElementById('btn-delete-character')?.classList.remove('hidden');
-}
-
-function resetCharacterForm() {
-  document.getElementById('form-title').textContent = 'Add New Character';
-  document.getElementById('edit-character-id').value = '';
-  document.getElementById('form-character')?.reset();
-  
-  const fontSizeInput = document.getElementById('input-char-fontsize');
-  if (fontSizeInput) fontSizeInput.value = 26;
-
-  document.getElementById('btn-save-character').textContent = 'Save Character';
-  document.getElementById('btn-delete-character')?.classList.add('hidden');
-}
-
-function updateTargetDropdown() {
-  const select = document.getElementById('select-target-character');
-  if (!select) return;
-  select.innerHTML = '<option value="">-- Select Target --</option>';
-
-  nodesDataSet.get().forEach(c => {
-    if (c.id !== selectedNodeId) {
-      const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = c.label;
-      select.appendChild(opt);
-    }
-  });
-}
-
-function renderLegend() {
-  const legendContainer = document.getElementById('legend-list');
-  if (!legendContainer) return;
-  legendContainer.innerHTML = '';
-
-  Object.entries(REL_COLORS).forEach(([type, color]) => {
-    const item = document.createElement('div');
-    item.className = 'flex items-center gap-2.5 text-sm';
-    item.innerHTML = `<span class="w-3 h-3 rounded-full shrink-0 shadow-2xs" style="background-color: ${color}"></span><span>${type}</span>`;
-    legendContainer.appendChild(item);
-  });
-}
-
-// --- DRAG, DROP & FILE READER ENGINE ---
-function processFileToBase64(file) {
-  if (!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    const urlInput = document.getElementById('input-char-avatar');
-    if (urlInput) urlInput.value = evt.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-// --- BULLETPROOF JSON IMPORT MODAL HELPER ---
-function openJsonImportModal() {
-  let modal = document.getElementById('json-import-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'json-import-modal';
-    modal.className = 'fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4';
-    modal.innerHTML = `
-      <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 flex flex-col gap-4">
-        <h3 class="text-lg font-bold text-slate-800">Import Map JSON Backup</h3>
-        <p class="text-xs text-slate-500">Paste your exported JSON map backup data, character nodes, or relationship links below:</p>
-        <textarea id="json-paste-area" rows="10" placeholder="Paste JSON here..." class="w-full text-xs font-mono p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
-        <div class="flex justify-end gap-3">
-          <button id="btn-cancel-import" type="button" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
-          <button id="btn-confirm-import" type="button" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors">Import Map</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-
-    document.getElementById('btn-cancel-import').addEventListener('click', () => {
-      modal.classList.add('hidden');
-    });
-
-    document.getElementById('btn-confirm-import').addEventListener('click', () => {
-      const jsonString = document.getElementById('json-paste-area').value;
-      if (!jsonString || jsonString.trim() === '') {
-        alert('Please paste valid JSON data.');
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(jsonString);
-        let importedNodes = [];
-        let importedEdges = [];
-        let mapName = 'Imported Map';
-
-        if (Array.isArray(parsed)) {
-          // Flat array of nodes/edges
-          importedNodes = parsed.filter(item => item.id !== undefined || (item.label !== undefined && item.from === undefined));
-          importedEdges = parsed.filter(item => item.from !== undefined && item.to !== undefined);
-        } else if (typeof parsed === 'object' && parsed !== null) {
-          mapName = parsed.mapName || parsed.name || 'Imported Map';
-          importedNodes = parsed.characters || parsed.nodes || parsed.items || [];
-          importedEdges = parsed.relationships || parsed.edges || parsed.links || [];
-
-          // Single object pasted directly
-          if (importedNodes.length === 0 && importedEdges.length === 0) {
-            if (parsed.from !== undefined && parsed.to !== undefined) {
-              importedEdges = [parsed];
-            } else if (parsed.id !== undefined || parsed.label !== undefined) {
-              importedNodes = [parsed];
-            }
-          }
-        }
-
-        // Auto-stub any missing nodes referenced by edges so import never fails
-        const existingNodeIds = new Set(importedNodes.map(n => String(n.id)));
-        importedEdges.forEach(edge => {
-          if (edge.from && !existingNodeIds.has(String(edge.from))) {
-            importedNodes.push({ id: String(edge.from), label: `Character ${edge.from}`, group: "Other" });
-            existingNodeIds.add(String(edge.from));
-          }
-          if (edge.to && !existingNodeIds.has(String(edge.to))) {
-            importedNodes.push({ id: String(edge.to), label: `Character ${edge.to}`, group: "Other" });
-            existingNodeIds.add(String(edge.to));
-          }
-        });
-
-        if (importedNodes.length === 0 && importedEdges.length === 0) {
-          alert('Import failed: Could not find any valid character nodes or relationships in the JSON structure.');
-          return;
-        }
-
-        const newId = 'map_' + Date.now();
-        mapRegistry.push({ id: newId, name: mapName });
-        
-        localStorage.setItem(`char_map_data_${newId}`, JSON.stringify({
-          nodes: importedNodes,
-          edges: importedEdges
-        }));
-        localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
-
-        renderMapDropdown();
-        loadMapData(newId);
-        modal.classList.add('hidden');
-        alert(`Successfully imported "${mapName}" with ${importedNodes.length} characters and ${importedEdges.length} relationships!`);
-      } catch (err) {
-        alert('Invalid JSON format: ' + err.message);
-        console.error(err);
-      }
-    });
-  } else {
-    document.getElementById('json-paste-area').value = '';
-    modal.classList.remove('hidden');
-  }
-}
-
-// --- EVENT LISTENERS & BINDINGS ---
 document.addEventListener('DOMContentLoaded', () => {
-  initNetworkEngine();
-  initMapRegistry();
+  // --- STATE MANAGEMENT ---
+  let maps = JSON.parse(localStorage.getItem('storygraph_maps')) || {};
+  let activeMapId = localStorage.getItem('storygraph_active_map') || null;
 
-  document.getElementById('select-active-map')?.addEventListener('change', (e) => loadMapData(e.target.value));
-  document.getElementById('btn-new-map')?.addEventListener('click', createNewMap);
-  document.getElementById('btn-rename-map')?.addEventListener('click', renameActiveMap);
-  document.getElementById('btn-delete-map')?.addEventListener('click', deleteActiveMap);
+  // Default initial map if none exist
+  if (Object.keys(maps).length === 0) {
+    const defaultId = 'book-' + Date.now();
+    maps[defaultId] = {
+      title: 'Les Misérables (Sample)',
+      nodes: [
+        { id: 'jean-valjean', label: 'Jean Valjean', shortName: 'Valjean', role: 'Protagonist', fontSize: 16, avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', bio: 'Former convict striving for redemption and protector of Cosette.' },
+        { id: 'javert', label: 'Inspector Javert', shortName: 'Javert', role: 'Antagonist', fontSize: 14, avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', bio: 'Obsessive police inspector bound strictly to the letter of the law.' },
+        { id: 'cosette', label: 'Cosette', shortName: 'Cosette', role: 'Supporting', fontSize: 14, avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', bio: 'Adopted daughter of Jean Valjean.' },
+        { id: 'marius', label: 'Marius Pontmercy', shortName: 'Marius', role: 'Protagonist', fontSize: 14, avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150', bio: 'Student revolutionary and lover of Cosette.' }
+      ],
+      edges: [
+        { id: 'e1', from: 'jean-valjean', to: 'javert', type: 'Rival/Enemy', label: 'Pursuer / Pursued' },
+        { id: 'e2', from: 'jean-valjean', to: 'cosette', type: 'Family', label: 'Adoptive Father' },
+        { id: 'e3', from: 'cosette', to: 'marius', type: 'Romantic', label: 'Lovers' },
+        { id: 'e4', from: 'marius', to: 'jean-valjean', type: 'Ally/Friend', label: 'Father-in-law' }
+      ]
+    };
+    activeMapId = defaultId;
+    saveToLocalStorage();
+  } else if (!activeMapId || !maps[activeMapId]) {
+    activeMapId = Object.keys(maps)[0];
+  }
 
-  document.getElementById('btn-zoom-in')?.addEventListener('click', () => network?.moveTo({ scale: network.getScale() * 1.25 }));
-  document.getElementById('btn-zoom-out')?.addEventListener('click', () => network?.moveTo({ scale: network.getScale() / 1.25 }));
-  document.getElementById('btn-reset-view')?.addEventListener('click', () => network?.fit({ animation: { duration: 500 } }));
-  document.getElementById('btn-clear-selection')?.addEventListener('click', () => { network?.unselectAll(); handleDeselect(); });
+  let network = null;
+  let selectedNodeId = null;
+  let lineSpacingValue = 250;
 
-  const fileInput = document.getElementById('input-char-avatar-file');
-  const dropZone = document.getElementById('avatar-dropzone');
+  // DOM Elements
+  const selectActiveMap = document.getElementById('select-active-map');
+  const btnNewMap = document.getElementById('btn-new-map');
+  const btnRenameMap = document.getElementById('btn-rename-map');
+  const btnDeleteMap = document.getElementById('btn-delete-map');
+  const btnExportJson = document.getElementById('btn-export-json');
 
-  if (fileInput) {
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length > 0) processFileToBase64(e.target.files[0]);
+  const statCharacters = document.getElementById('stat-characters');
+  const statRelationships = document.getElementById('stat-relationships');
+  const sliderLineSpacing = document.getElementById('slider-line-spacing');
+  
+  const btnZoomIn = document.getElementById('btn-zoom-in');
+  const btnZoomOut = document.getElementById('btn-zoom-out');
+  const btnResetView = document.getElementById('btn-reset-view');
+  const legendList = document.getElementById('legend-list');
+
+  // Inspector Elements
+  const inspectorEmptyState = document.getElementById('inspector-empty-state');
+  const inspectorContent = document.getElementById('inspector-content');
+  const btnClearSelection = document.getElementById('btn-clear-selection');
+  const inspectorAvatar = document.getElementById('inspector-avatar');
+  const inspectorArchetype = document.getElementById('inspector-archetype');
+  const inspectorName = document.getElementById('inspector-name');
+  const inspectorDescription = document.getElementById('inspector-description');
+  const inspectorRelCount = document.getElementById('inspector-rel-count');
+  const inspectorRelationshipsList = document.getElementById('inspector-relationships-list');
+  
+  // Relationship Form
+  const formRelationship = document.getElementById('form-relationship');
+  const selectTargetCharacter = document.getElementById('select-target-character');
+  const selectRelType = document.getElementById('select-rel-type');
+  const inputRelLabel = document.getElementById('input-rel-label');
+
+  // Character Editor Form
+  const formCharacter = document.getElementById('form-character');
+  const formTitle = document.getElementById('form-title');
+  const btnModeToggle = document.getElementById('btn-mode-toggle');
+  const editCharacterId = document.getElementById('edit-character-id');
+  const inputCharName = document.getElementById('input-char-name');
+  const inputCharShortname = document.getElementById('input-char-shortname');
+  const inputCharRole = document.getElementById('input-char-role');
+  const inputCharFontsize = document.getElementById('input-char-fontsize');
+  const inputCharAvatar = document.getElementById('input-char-avatar');
+  const inputCharAvatarFile = document.getElementById('input-char-avatar-file');
+  const inputCharBio = document.getElementById('input-char-bio');
+  const btnSaveCharacter = document.getElementById('btn-save-character');
+  const btnDeleteCharacter = document.getElementById('btn-delete-character');
+
+  // Relationship Color Mapping
+  const relColors = {
+    'Ally/Friend': '#10b981',      // Emerald
+    'Authority/Power': '#6366f1',  // Indigo
+    'Family': '#3b82f6',           // Blue
+    'Rival/Enemy': '#f43f5e',      // Rose
+    'Romantic': '#ec4899',         // Pink
+    'Other': '#64748b'             // Slate
+  };
+
+  // --- INITIALIZATION ---
+  function init() {
+    populateMapSelector();
+    renderNetwork();
+    updateStats();
+    renderLegend();
+    setupEventListeners();
+  }
+
+  function saveToLocalStorage() {
+    localStorage.setItem('storygraph_maps', JSON.stringify(maps));
+    localStorage.setItem('storygraph_active_map', activeMapId);
+  }
+
+  function getCurrentMap() {
+    return maps[activeMapId];
+  }
+
+  // --- MAP SELECTOR & MANAGEMENT ---
+  function populateMapSelector() {
+    selectActiveMap.innerHTML = '';
+    Object.keys(maps).forEach(id => {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = maps[id].title;
+      if (id === activeMapId) opt.selected = true;
+      selectActiveMap.appendChild(opt);
     });
   }
 
-  if (dropZone) {
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-indigo-400', 'bg-indigo-50'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-indigo-400', 'bg-indigo-50'));
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('border-indigo-400', 'bg-indigo-50');
-      if (e.dataTransfer.files.length > 0) processFileToBase64(e.dataTransfer.files[0]);
+  btnNewMap.addEventListener('click', () => {
+    const title = prompt('Enter book / map title:', 'New Story Map');
+    if (!title) return;
+    const newId = 'book-' + Date.now();
+    maps[newId] = {
+      title: title.trim(),
+      nodes: [
+        { id: 'char-1', label: 'Protagonist', shortName: 'Hero', role: 'Protagonist', fontSize: 16, avatar: '', bio: 'Main character of the story.' }
+      ],
+      edges: []
+    };
+    activeMapId = newId;
+    saveToLocalStorage();
+    populateMapSelector();
+    selectedNodeId = null;
+    renderNetwork();
+    updateStats();
+    renderLegend();
+    resetInspector();
+  });
+
+  btnRenameMap.addEventListener('click', () => {
+    const currentMap = getCurrentMap();
+    const newTitle = prompt('Rename book / map title:', currentMap.title);
+    if (!newTitle) return;
+    currentMap.title = newTitle.trim();
+    saveToLocalStorage();
+    populateMapSelector();
+  });
+
+  btnDeleteMap.addEventListener('click', () => {
+    if (Object.keys(maps).length <= 1) {
+      alert('You must keep at least one book map.');
+      return;
+    }
+    const currentMap = getCurrentMap();
+    if (!confirm(`Are you sure you want to delete "${currentMap.title}"?`)) return;
+    delete maps[activeMapId];
+    activeMapId = Object.keys(maps)[0];
+    saveToLocalStorage();
+    populateMapSelector();
+    selectedNodeId = null;
+    renderNetwork();
+    updateStats();
+    renderLegend();
+    resetInspector();
+  });
+
+  selectActiveMap.addEventListener('change', (e) => {
+    activeMapId = e.target.value;
+    saveToLocalStorage();
+    selectedNodeId = null;
+    renderNetwork();
+    updateStats();
+    renderLegend();
+    resetInspector();
+  });
+
+  btnExportJson.addEventListener('click', () => {
+    const currentMap = getCurrentMap();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentMap, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `${currentMap.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_storygraph.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  });
+
+  // --- VIS-NETWORK RENDERING ---
+  function renderNetwork() {
+    const currentMap = getCurrentMap();
+    const container = document.getElementById('character-network');
+
+    // Transform nodes for vis-network
+    const visNodes = currentMap.nodes.map(n => ({
+      id: n.id,
+      label: n.shortName || n.label,
+      title: `${n.label} (${n.role || 'Character'})`,
+      shape: 'circularImage',
+      image: n.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      brokenImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      size: 35,
+      font: {
+        size: n.fontSize || 14,
+        color: '#1e293b',
+        face: 'ui-sans-serif, system-ui, sans-serif',
+        background: 'rgba(255, 255, 255, 0.85)',
+        strokeWidth: 0,
+        padding: 4
+      },
+      borderWidth: 3,
+      borderWidthSelected: 5,
+      color: {
+        border: selectedNodeId === n.id ? '#4f46e5' : '#cbd5e1',
+        background: '#ffffff',
+        highlight: { border: '#4f46e5', background: '#f8fafc' },
+        hover: { border: '#6366f1', background: '#f8fafc' }
+      }
+    }));
+
+    // Transform edges for vis-network
+    const visEdges = currentMap.edges.map(e => ({
+      id: e.id,
+      from: e.from,
+      to: e.to,
+      label: e.label || '',
+      color: {
+        color: relColors[e.type] || '#64748b',
+        highlight: '#4f46e5',
+        hover: '#4f46e5'
+      },
+      width: 2,
+      font: { size: 10, align: 'middle', color: '#64748b', background: '#ffffff' },
+      arrows: { to: { enabled: false } },
+      smooth: { type: 'cubicBezier', roundness: 0.2 }
+    }));
+
+    const data = {
+      nodes: new vis.DataSet(visNodes),
+      edges: new vis.DataSet(visEdges)
+    };
+
+    const options = {
+      nodes: {
+        shadow: { enabled: true, color: 'rgba(0,0,0,0.1)', size: 5, x: 0, y: 3 }
+      },
+      edges: {
+        shadow: false
+      },
+      physics: {
+        barnesHut: {
+          gravitationalConstant: -3000,
+          centralGravity: 0.3,
+          springLength: lineSpacingValue,
+          springConstant: 0.04,
+          damping: 0.09,
+          avoidOverlap: 0.2
+        },
+        stabilization: { iterations: 150 }
+      },
+      interaction: {
+        hover: true,
+        dragNodes: true,
+        zoomView: true,
+        dragView: true
+      }
+    };
+
+    if (network) {
+      network.destroy();
+    }
+
+    network = new vis.Network(container, data, options);
+
+    // Event Listeners for Network
+    network.on('click', params => {
+      if (params.nodes.length > 0) {
+        selectNode(params.nodes[0]);
+      } else {
+        selectedNodeId = null;
+        resetInspector();
+        renderNetwork();
+      }
+    });
+
+    network.on('dragEnd', params => {
+      // Physics stabilization after drag
     });
   }
 
-  // Character Form Submission
-  document.getElementById('form-character')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const editId = document.getElementById('edit-character-id').value;
-    const name = document.getElementById('input-char-name').value.trim();
-    const shortName = document.getElementById('input-char-shortname')?.value.trim() || '';
-    const fontSize = parseInt(document.getElementById('input-char-fontsize')?.value) || 24;
-    const role = document.getElementById('input-char-role').value.trim();
-    const avatarUrl = document.getElementById('input-char-avatar').value.trim();
-    const bio = document.getElementById('input-char-bio').value.trim();
+  // --- UI STATS & LEGEND ---
+  function updateStats() {
+    const currentMap = getCurrentMap();
+    statCharacters.textContent = currentMap.nodes.length;
+    statRelationships.textContent = currentMap.edges.length;
+  }
 
-    const nodeColor = '#6366f1';
-    const finalImageSvg = createDynamicAvatarSVG(name, shortName, fontSize, nodeColor, avatarUrl);
+  function renderLegend() {
+    legendList.innerHTML = '';
+    Object.keys(relColors).forEach(type => {
+      const color = relColors[type];
+      const div = document.createElement('div');
+      div.className = 'flex items-center gap-2';
+      div.innerHTML = `
+        <span class="w-3 h-3 rounded-full shrink-0" style="background-color: ${color};"></span>
+        <span class="text-slate-600 truncate">${type}</span>
+      `;
+      legendList.appendChild(div);
+    });
+  }
 
-    if (editId) {
-      nodesDataSet.update({ 
-        id: editId, 
-        label: name, 
-        shortName, 
-        fontSize, 
-        title: role, 
-        bio: bio, 
-        image: finalImageSvg,
-        rawAvatar: avatarUrl
-      });
-      if (selectedNodeId === editId) updateInspector(editId);
-    } else {
-      nodesDataSet.add({ 
-        id: String(Date.now()), 
-        label: name, 
-        shortName, 
-        fontSize, 
-        title: role, 
-        bio: bio, 
-        shape: 'circularImage', 
-        image: finalImageSvg, 
-        rawAvatar: avatarUrl,
-        color: { border: nodeColor } 
+  // --- CANVAS CONTROLS ---
+  sliderLineSpacing.addEventListener('input', (e) => {
+    lineSpacingValue = parseInt(e.target.value);
+    if (network) {
+      network.setOptions({
+        physics: {
+          barnesHut: { springLength: lineSpacingValue }
+        }
       });
     }
-
-    saveDataToLocalStorage();
-    updateTargetDropdown();
-    if (!editId) resetCharacterForm();
   });
 
-  document.getElementById('btn-delete-character')?.addEventListener('click', () => {
-    const editId = document.getElementById('edit-character-id').value;
-    if (!editId) return;
+  btnZoomIn.addEventListener('click', () => {
+    if (!network) return;
+    const scale = network.getScale();
+    network.moveTo({ scale: scale * 1.2, animation: { duration: 300 } });
+  });
 
-    if (confirm('Delete this character and all connected relationships?')) {
-      edgesDataSet.get({ filter: e => e.from === editId || e.to === editId }).forEach(e => edgesDataSet.remove(e.id));
-      nodesDataSet.remove(editId);
-      saveDataToLocalStorage();
-      handleDeselect();
-      updateTargetDropdown();
+  btnZoomOut.addEventListener('click', () => {
+    if (!network) return;
+    const scale = network.getScale();
+    network.moveTo({ scale: scale * 0.8, animation: { duration: 300 } });
+  });
+
+  btnResetView.addEventListener('click', () => {
+    if (!network) return;
+    network.fit({ animation: { duration: 500 } });
+  });
+
+  // --- CHARACTER INSPECTOR & FORM LOGIC ---
+  function selectNode(nodeId) {
+    selectedNodeId = nodeId;
+    const currentMap = getCurrentMap();
+    const character = currentMap.nodes.find(n => n.id === nodeId);
+    if (!character) return;
+
+    // Switch UI States
+    inspectorEmptyState.classList.add('hidden');
+    inspectorContent.classList.remove('hidden');
+    btnClearSelection.classList.remove('hidden');
+
+    // Populate Inspector Profile Header
+    inspectorAvatar.src = character.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150';
+    inspectorArchetype.textContent = character.role || 'Character';
+    inspectorName.textContent = character.label;
+    inspectorDescription.textContent = character.bio || 'No description provided.';
+
+    // Populate Relationships for Active Character
+    populateInspectorRelationships(character.id);
+    populateTargetDropdown(character.id);
+
+    // Populate Character Edit Form
+    formTitle.textContent = 'Edit Character';
+    btnModeToggle.classList.remove('hidden');
+    editCharacterId.value = character.id;
+    inputCharName.value = character.label || '';
+    inputCharShortname.value = character.shortName || '';
+    inputCharRole.value = character.role || '';
+    inputCharFontsize.value = character.fontSize || 14;
+    inputCharAvatar.value = character.avatar || '';
+    inputCharBio.value = character.bio || '';
+    btnSaveCharacter.textContent = 'Update Character';
+    btnDeleteCharacter.classList.remove('hidden');
+
+    renderNetwork();
+  }
+
+  function resetInspector() {
+    selectedNodeId = null;
+    inspectorEmptyState.classList.remove('hidden');
+    inspectorContent.classList.add('hidden');
+    btnClearSelection.classList.add('hidden');
+
+    // Reset Character Form to "Add New" mode
+    formTitle.textContent = 'Add New Character';
+    btnModeToggle.classList.add('hidden');
+    editCharacterId.value = '';
+    formCharacter.reset();
+    inputCharFontsize.value = '14';
+    btnSaveCharacter.textContent = 'Save Character';
+    btnDeleteCharacter.classList.add('hidden');
+
+    if (network) {
+      network.unselectAll();
+      renderNetwork();
     }
+  }
+
+  btnClearSelection.addEventListener('click', () => {
+    resetInspector();
   });
 
-  document.getElementById('btn-mode-toggle')?.addEventListener('click', resetCharacterForm);
+  btnModeToggle.addEventListener('click', () => {
+    resetInspector();
+  });
 
-  document.getElementById('form-relationship')?.addEventListener('submit', (e) => {
+  function populateInspectorRelationships(nodeId) {
+    const currentMap = getCurrentMap();
+    const rels = currentMap.edges.filter(e => e.from === nodeId || e.to === nodeId);
+    inspectorRelCount.textContent = rels.length;
+    inspectorRelationshipsList.innerHTML = '';
+
+    if (rels.length === 0) {
+      inspectorRelationshipsList.innerHTML = `<p class="text-xs text-slate-400 italic">No relationships linked yet.</p>`;
+      return;
+    }
+
+    rels.forEach(rel => {
+      const isFrom = rel.from === nodeId;
+      const targetId = isFrom ? rel.to : rel.from;
+      const targetChar = currentMap.nodes.find(n => n.id === targetId);
+      const targetName = targetChar ? targetChar.label : 'Unknown';
+      const color = relColors[rel.type] || '#64748b';
+
+      const item = document.createElement('div');
+      item.className = 'flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs';
+      item.innerHTML = `
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${color};"></span>
+          <div class="min-w-0">
+            <p class="font-semibold text-slate-800 truncate">${targetName}</p>
+            <p class="text-[10px] text-slate-500 truncate">${rel.type} ${rel.label ? `(${rel.label})` : ''}</p>
+          </div>
+        </div>
+        <button type="button" data-edge-id="${rel.id}" class="btn-delete-edge p-1 text-slate-400 hover:text-rose-600 transition-colors">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+        </button>
+      `;
+      inspectorRelationshipsList.appendChild(item);
+    });
+
+    lucide.createIcons();
+
+    // Bind delete edge buttons
+    document.querySelectorAll('.btn-delete-edge').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const edgeId = e.currentTarget.getAttribute('data-edge-id');
+        currentMap.edges = currentMap.edges.filter(ed => ed.id !== edgeId);
+        saveToLocalStorage();
+        renderNetwork();
+        updateStats();
+        selectNode(nodeId);
+      });
+    });
+  }
+
+  function populateTargetDropdown(excludeId) {
+    const currentMap = getCurrentMap();
+    selectTargetCharacter.innerHTML = '<option value="">-- Select Target --</option>';
+    currentMap.nodes.forEach(n => {
+      if (n.id !== excludeId) {
+        const opt = document.createElement('option');
+        opt.value = n.id;
+        opt.textContent = n.label;
+        selectTargetCharacter.appendChild(opt);
+      }
+    });
+  }
+
+  // --- HANDLE RELATIONSHIP FORM SUBMISSION ---
+  formRelationship.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (!selectedNodeId) return alert('Select a primary character first.');
+    if (!selectedNodeId) return;
 
-    const targetId = document.getElementById('select-target-character').value;
-    const relType = document.getElementById('select-rel-type').value;
-    const customLabel = document.getElementById('input-rel-label').value.trim();
+    const targetId = selectTargetCharacter.value;
+    const relType = selectRelType.value;
+    const relLabel = inputRelLabel.value.trim();
 
-    if (!targetId) return alert('Choose a target character.');
-
-    const colorHex = REL_COLORS[relType] || '#64748b';
-    const displayLabel = customLabel !== '' ? customLabel : relType;
-
-    const existingEdges = edgesDataSet.get({ filter: e => (e.from === selectedNodeId && e.to === targetId) || (e.from === targetId && e.to === selectedNodeId) });
-
-    if (existingEdges.length > 0) {
-      edgesDataSet.update({ id: existingEdges[0].id, label: displayLabel, type: relType, color: { color: colorHex } });
-    } else {
-      edgesDataSet.add({ id: 'e_' + Date.now(), from: selectedNodeId, to: targetId, label: displayLabel, type: relType, color: { color: colorHex } });
+    if (!targetId) {
+      alert('Please select a target character.');
+      return;
     }
 
-    saveDataToLocalStorage();
-    updateInspector(selectedNodeId);
-    highlightConnectedSubGraph(selectedNodeId);
-    e.target.reset();
+    const currentMap = getCurrentMap();
+    const newEdge = {
+      id: 'edge-' + Date.now(),
+      from: selectedNodeId,
+      to: targetId,
+      type: relType,
+      label: relLabel
+    };
+
+    currentMap.edges.push(newEdge);
+    saveToLocalStorage();
+    renderNetwork();
+    updateStats();
+    formRelationship.reset();
+    selectNode(selectedNodeId);
   });
 
-  // --- EXPORT & IMPORT JSON HANDLERS ---
-  document.getElementById('btn-export-json')?.addEventListener('click', () => {
-    const currentMap = mapRegistry.find(m => m.id === activeMapId);
-    const blob = new Blob([JSON.stringify({ mapName: currentMap?.name || 'Map', characters: nodesDataSet.get(), relationships: edgesDataSet.get() }, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(currentMap?.name || 'map').toLowerCase().replace(/[^a-z0-9]/g, '_')}_backup.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // --- HANDLE CHARACTER FORM SUBMISSION (CREATE / UPDATE) ---
+  inputCharAvatarFile.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      inputCharAvatar.value = event.target.result;
+    };
+    reader.readAsDataURL(file);
   });
 
-  document.getElementById('btn-import-json')?.addEventListener('click', openJsonImportModal);
+  formCharacter.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const currentMap = getCurrentMap();
+    const charId = editCharacterId.value;
+    const name = inputCharName.value.trim();
+    if (!name) return;
 
-  if (window.lucide) lucide.createIcons();
+    const shortName = inputCharShortname.value.trim() || name;
+    const role = inputCharRole.value.trim();
+    const fontSize = parseInt(inputCharFontsize.value) || 14;
+    const avatar = inputCharAvatar.value.trim();
+    const bio = inputCharBio.value.trim();
+
+    if (charId) {
+      // Update existing character
+      const char = currentMap.nodes.find(n => n.id === charId);
+      if (char) {
+        char.label = name;
+        char.shortName = shortName;
+        char.role = role;
+        char.fontSize = fontSize;
+        char.avatar = avatar;
+        char.bio = bio;
+      }
+    } else {
+      // Create new character
+      const newChar = {
+        id: 'char-' + Date.now(),
+        label: name,
+        shortName: shortName,
+        role: role,
+        fontSize: fontSize,
+        avatar: avatar,
+        bio: bio
+      };
+      currentMap.nodes.push(newChar);
+      selectedNodeId = newChar.id;
+    }
+
+    saveToLocalStorage();
+    renderNetwork();
+    updateStats();
+
+    if (selectedNodeId) {
+      selectNode(selectedNodeId);
+    } else {
+      resetInspector();
+    }
+  });
+
+  btnDeleteCharacter.addEventListener('click', () => {
+    const charId = editCharacterId.value;
+    if (!charId) return;
+    const currentMap = getCurrentMap();
+    const char = currentMap.nodes.find(n => n.id === charId);
+    if (!char) return;
+
+    if (!confirm(`Are you sure you want to delete ${char.label}? This will also remove all connected relationships.`)) return;
+
+    // Remove node and any connected edges
+    currentMap.nodes = currentMap.nodes.filter(n => n.id !== charId);
+    currentMap.edges = currentMap.edges.filter(e => e.from !== charId && e.to !== charId);
+
+    saveToLocalStorage();
+    resetInspector();
+    renderNetwork();
+    updateStats();
+  });
+
+  // Run initial setup
+  init();
 });
