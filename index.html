@@ -20,12 +20,30 @@
     <!-- CANVAS VIEW (Left ~70%) -->
     <div class="relative flex-1 h-full bg-slate-50 border-r border-slate-200">
       
-      <!-- Top Canvas Header Bar -->
-      <div class="absolute top-4 left-4 z-10 flex items-center gap-4 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-sm border border-slate-200/80">
-        <div class="text-sm font-semibold text-slate-700">
+      <!-- Top Canvas Header Bar with Multi-Map Book Switcher -->
+      <div class="absolute top-4 left-4 z-10 flex items-center gap-3 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-sm border border-slate-200/80 max-w-[calc(100%-120px)] flex-wrap">
+        
+        <!-- Book / Map Selector Controls -->
+        <div class="flex items-center gap-1.5 border-r border-slate-200 pr-3">
+          <i data-lucide="book-open" class="w-4 h-4 text-indigo-600"></i>
+          <select id="select-active-map" class="text-xs font-bold text-slate-800 bg-transparent border-none outline-hidden cursor-pointer pr-1 hover:text-indigo-600 transition-colors">
+            <!-- Dynamically Populated Maps -->
+          </select>
+          <button id="btn-new-map" title="Create New Book Map" class="p-1 hover:bg-slate-100 rounded-md text-slate-600 transition-colors">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          </button>
+          <button id="btn-rename-map" title="Rename Active Map" class="p-1 hover:bg-slate-100 rounded-md text-slate-600 transition-colors">
+            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+          </button>
+          <button id="btn-delete-map" title="Delete Active Map" class="p-1 hover:bg-slate-100 hover:text-rose-600 rounded-md text-slate-400 transition-colors">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <div class="text-xs font-semibold text-slate-600">
           <span id="stat-characters">0</span> characters, <span id="stat-relationships">0</span> relationships
         </div>
-        <button id="btn-clear-selection" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-300 font-medium transition-colors hidden">
+        <button id="btn-clear-selection" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-300 font-medium transition-colors hidden">
           Clear selection
         </button>
       </div>
