@@ -456,9 +456,8 @@ function processFileToBase64(file) {
   reader.readAsDataURL(file);
 }
 
-// --- JSON IMPORT MODAL HELPER ---
+// --- BULLETPROOF JSON IMPORT MODAL HELPER ---
 function openJsonImportModal() {
-  // Check if a modal already exists, create if not
   let modal = document.getElementById('json-import-modal');
   if (!modal) {
     modal = document.createElement('div');
@@ -467,7 +466,7 @@ function openJsonImportModal() {
     modal.innerHTML = `
       <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 flex flex-col gap-4">
         <h3 class="text-lg font-bold text-slate-800">Import Map JSON Backup</h3>
-        <p class="text-xs text-slate-500">Paste your exported JSON map backup data below to restore or open your character network map:</p>
+        <p class="text-xs text-slate-500">Paste your exported JSON map backup data, character nodes, or relationship links below:</p>
         <textarea id="json-paste-area" rows="10" placeholder="Paste JSON here..." class="w-full text-xs font-mono p-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:outline-none"></textarea>
         <div class="flex justify-end gap-3">
           <button id="btn-cancel-import" type="button" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Cancel</button>
@@ -490,9 +489,46 @@ function openJsonImportModal() {
 
       try {
         const parsed = JSON.parse(jsonString);
-        const importedNodes = parsed.characters || parsed.nodes || [];
-        const importedEdges = parsed.relationships || parsed.edges || [];
-        const mapName = parsed.mapName || 'Imported Map';
+        let importedNodes = [];
+        let importedEdges = [];
+        let mapName = 'Imported Map';
+
+        if (Array.isArray(parsed)) {
+          // Flat array of nodes/edges
+          importedNodes = parsed.filter(item => item.id !== undefined || (item.label !== undefined && item.from === undefined));
+          importedEdges = parsed.filter(item => item.from !== undefined && item.to !== undefined);
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          mapName = parsed.mapName || parsed.name || 'Imported Map';
+          importedNodes = parsed.characters || parsed.nodes || parsed.items || [];
+          importedEdges = parsed.relationships || parsed.edges || parsed.links || [];
+
+          // Single object pasted directly
+          if (importedNodes.length === 0 && importedEdges.length === 0) {
+            if (parsed.from !== undefined && parsed.to !== undefined) {
+              importedEdges = [parsed];
+            } else if (parsed.id !== undefined || parsed.label !== undefined) {
+              importedNodes = [parsed];
+            }
+          }
+        }
+
+        // Auto-stub any missing nodes referenced by edges so import never fails
+        const existingNodeIds = new Set(importedNodes.map(n => String(n.id)));
+        importedEdges.forEach(edge => {
+          if (edge.from && !existingNodeIds.has(String(edge.from))) {
+            importedNodes.push({ id: String(edge.from), label: `Character ${edge.from}`, group: "Other" });
+            existingNodeIds.add(String(edge.from));
+          }
+          if (edge.to && !existingNodeIds.has(String(edge.to))) {
+            importedNodes.push({ id: String(edge.to), label: `Character ${edge.to}`, group: "Other" });
+            existingNodeIds.add(String(edge.to));
+          }
+        });
+
+        if (importedNodes.length === 0 && importedEdges.length === 0) {
+          alert('Import failed: Could not find any valid character nodes or relationships in the JSON structure.');
+          return;
+        }
 
         const newId = 'map_' + Date.now();
         mapRegistry.push({ id: newId, name: mapName });
@@ -506,9 +542,9 @@ function openJsonImportModal() {
         renderMapDropdown();
         loadMapData(newId);
         modal.classList.add('hidden');
-        alert(`Successfully imported "${mapName}" with ${importedNodes.length} characters!`);
+        alert(`Successfully imported "${mapName}" with ${importedNodes.length} characters and ${importedEdges.length} relationships!`);
       } catch (err) {
-        alert('Invalid JSON format. Please check your pasted text and try again.');
+        alert('Invalid JSON format: ' + err.message);
         console.error(err);
       }
     });
