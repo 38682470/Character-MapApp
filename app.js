@@ -1,6 +1,6 @@
 /**
  * DYNAMIC CHARACTER NETWORK MAP - COMPLETE APPLICATION LOGIC
- * Features: Multi-Map Manager, Vis-Network Physics Centering, Inspector, Forms, LocalStorage Persistence & JSON Backup.
+ * Features: Multi-Map Manager, Copy/Paste JSON Modal, Vis-Network Physics Centering, Inspector, Forms, LocalStorage Persistence.
  */
 
 // --- GLOBAL STATE & CONFIGURATION ---
@@ -104,13 +104,13 @@ function handleNodeClick(params) {
     const nodeId = params.nodes[0];
     selectedNodeId = nodeId;
 
-    // 1. Dynamic Centering Animation
+    // Dynamic Centering Animation
     network.focus(nodeId, {
       scale: 1.1,
       animation: { duration: 600, easingFunction: 'easeInOutQuad' }
     });
 
-    // 2. Dim Unconnected Subgraph
+    // Dim Unconnected Subgraph
     highlightConnectedSubGraph(nodeId);
 
     document.getElementById('btn-clear-selection').classList.remove('hidden');
@@ -160,7 +160,6 @@ function initMapRegistry() {
   if (rawRegistry) {
     mapRegistry = JSON.parse(rawRegistry);
   } else if (oldLegacyNodes) {
-    // Migration: Move existing v1 single-map data into Map Registry
     const legacyEdges = localStorage.getItem('char_map_edges_v1');
     const migratedId = 'map_' + Date.now();
     mapRegistry = [{ id: migratedId, name: 'Les Misérables' }];
@@ -170,7 +169,6 @@ function initMapRegistry() {
     }));
     localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
   } else {
-    // Initial First Launch Setup
     const defaultId = 'map_default';
     mapRegistry = [{ id: defaultId, name: 'Les Misérables' }];
     localStorage.setItem(`char_map_data_${defaultId}`, JSON.stringify({
@@ -215,7 +213,6 @@ function loadMapData(mapId) {
     edges = parsed.edges || [];
   }
 
-  // Fallback initial SVG avatars
   nodes = nodes.map(n => {
     if (!n.image || n.image === '') {
       n.image = createInitialsAvatarSVG(n.label);
@@ -252,7 +249,6 @@ function createNewMap() {
   const newId = 'map_' + Date.now();
   mapRegistry.push({ id: newId, name: mapName.trim() });
   
-  // Save blank initial template
   localStorage.setItem(`char_map_data_${newId}`, JSON.stringify({ nodes: [], edges: [] }));
   localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
 
@@ -406,6 +402,37 @@ function renderLegend() {
   });
 }
 
+// --- IMPORT PARSER ENGINE ---
+function processImportedJSON(parsed) {
+  let characters = parsed.characters || parsed.nodes || [];
+  let relationships = parsed.relationships || parsed.edges || [];
+
+  if (!Array.isArray(characters) || !Array.isArray(relationships)) {
+    alert('Invalid JSON structure. The JSON must contain "characters" and "relationships" arrays.');
+    return false;
+  }
+
+  // Update map title if mapName is provided in JSON
+  if (parsed.mapName && parsed.mapName.trim() !== '') {
+    const currentMap = mapRegistry.find(m => m.id === activeMapId);
+    if (currentMap) {
+      currentMap.name = parsed.mapName.trim();
+      renderMapDropdown();
+    }
+  }
+
+  nodesDataSet.clear();
+  edgesDataSet.clear();
+  nodesDataSet.add(characters);
+  edgesDataSet.add(relationships);
+
+  saveDataToLocalStorage();
+  updateTargetDropdown();
+  handleDeselect();
+  if (network) network.fit({ animation: { duration: 500 } });
+  return true;
+}
+
 // --- EVENT LISTENERS & BINDINGS ---
 document.addEventListener('DOMContentLoaded', () => {
   // 1. Initialize Canvas & Multi-Map Data Registry
@@ -533,26 +560,52 @@ document.addEventListener('DOMContentLoaded', () => {
     URL.revokeObjectURL(url);
   });
 
-  // 9. JSON Import
-  document.getElementById('input-import-json')?.addEventListener('change', (e) => {
+  // 9. Modal Control Events
+  const importModal = document.getElementById('modal-import-json');
+  const importTextarea = document.getElementById('textarea-import-json');
+
+  const openModal = () => {
+    if (importTextarea) importTextarea.value = '';
+    importModal?.classList.remove('hidden');
+  };
+
+  const closeModal = () => {
+    importModal?.classList.add('hidden');
+  };
+
+  document.getElementById('btn-open-import-modal')?.addEventListener('click', openModal);
+  document.getElementById('btn-close-import-modal')?.addEventListener('click', closeModal);
+  document.getElementById('btn-cancel-import')?.addEventListener('click', closeModal);
+
+  // 10. Submit Pasted JSON
+  document.getElementById('btn-submit-import-json')?.addEventListener('click', () => {
+    const rawText = importTextarea?.value.trim();
+    if (!rawText) {
+      alert('Please paste valid JSON text into the box.');
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(rawText);
+      if (processImportedJSON(parsed)) {
+        closeModal();
+      }
+    } catch (err) {
+      alert('Invalid JSON formatting. Please double-check your code.');
+    }
+  });
+
+  // 11. Modal File Input Option
+  document.getElementById('input-import-json-file')?.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const imported = JSON.parse(evt.target.result);
-        if (imported.characters && imported.relationships) {
-          nodesDataSet.clear();
-          edgesDataSet.clear();
-          nodesDataSet.add(imported.characters);
-          edgesDataSet.add(imported.relationships);
-          saveDataToLocalStorage();
-          updateTargetDropdown();
-          handleDeselect();
-          alert('Character map imported successfully!');
-        } else {
-          alert('Invalid backup file format.');
+        const parsed = JSON.parse(evt.target.result);
+        if (processImportedJSON(parsed)) {
+          closeModal();
         }
       } catch (err) {
         alert('Error parsing JSON file.');
