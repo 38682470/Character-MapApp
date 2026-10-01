@@ -1,6 +1,7 @@
 /**
  * DYNAMIC CHARACTER NETWORK MAP - COMPLETE APPLICATION LOGIC
- * Features: Multi-Map Manager, Copy/Paste JSON Modal, Vis-Network Physics Centering, Inspector, Forms, LocalStorage Persistence.
+ * Features: Multi-Map Manager, Physics Spacing, Drag-and-Drop Image Conversion, 
+ * Auto-Wrapping SVGs, Forms, LocalStorage Persistence.
  */
 
 // --- GLOBAL STATE & CONFIGURATION ---
@@ -12,8 +13,8 @@ const REL_COLORS = {
   'Authority/Power': '#f97316',  // Orange
   'Family': '#0284c7',           // Blue
   'Rival/Enemy': '#ef4444',      // Red
-  'Romantic': '#a855f7',       // Purple
-  'Other': '#64748b'            // Gray
+  'Romantic': '#a855f7',         // Purple
+  'Other': '#64748b'             // Gray
 };
 
 let network = null;
@@ -23,13 +24,13 @@ let selectedNodeId = null;
 let activeMapId = null;
 let mapRegistry = [];
 
-// Default Sample Character Data (for brand new maps)
+// Default Sample Character Data
 const DEFAULT_CHARACTERS = [
-  { id: '1', label: 'Jean Valjean', title: 'Protagonist', bio: 'Former convict striving for redemption and moral integrity.', shape: 'circularImage', image: '', color: { border: '#0284c7' } },
-  { id: '2', label: 'Javert', title: 'Inspector / Authority', bio: 'Unforgiving police inspector dedicated to rigid law and justice.', shape: 'circularImage', image: '', color: { border: '#f97316' } },
-  { id: '3', label: 'Marius', title: 'Lead Male', bio: 'Idealistic student revolutionary deeply in love with Cosette.', shape: 'circularImage', image: '', color: { border: '#a855f7' } },
-  { id: '4', label: 'Cosette', title: 'Love Interest / Daughter', bio: 'Fantine\'s daughter, raised by Jean Valjean as his own.', shape: 'circularImage', image: '', color: { border: '#84cc16' } },
-  { id: '5', label: 'Éponine', title: 'Tragic Heroine', bio: 'Secretly loves Marius and sacrifices herself at the barricades.', shape: 'circularImage', image: '', color: { border: '#ef4444' } }
+  { id: '1', label: 'Jean Valjean', shortName: 'Valjean', fontSize: 24, title: 'Protagonist', bio: 'Former convict striving for redemption and moral integrity.', shape: 'circularImage', image: '', color: { border: '#0284c7' } },
+  { id: '2', label: 'Javert', shortName: 'Javert', fontSize: 26, title: 'Inspector / Authority', bio: 'Unforgiving police inspector dedicated to rigid law and justice.', shape: 'circularImage', image: '', color: { border: '#f97316' } },
+  { id: '3', label: 'Marius', shortName: 'Marius', fontSize: 26, title: 'Lead Male', bio: 'Idealistic student revolutionary deeply in love with Cosette.', shape: 'circularImage', image: '', color: { border: '#a855f7' } },
+  { id: '4', label: 'Cosette', shortName: 'Cosette', fontSize: 26, title: 'Love Interest / Daughter', bio: 'Fantine\'s daughter, raised by Jean Valjean as his own.', shape: 'circularImage', image: '', color: { border: '#84cc16' } },
+  { id: '5', label: 'Éponine', shortName: 'Éponine', fontSize: 24, title: 'Tragic Heroine', bio: 'Secretly loves Marius and sacrifices herself at the barricades.', shape: 'circularImage', image: '', color: { border: '#ef4444' } }
 ];
 
 const DEFAULT_RELATIONSHIPS = [
@@ -40,18 +41,29 @@ const DEFAULT_RELATIONSHIPS = [
   { id: 'e5', from: '2', to: '1', label: 'Authority/Power', type: 'Authority/Power', color: { color: REL_COLORS['Authority/Power'] } }
 ];
 
-// Fallback Initials Avatar SVG Generator
-function createInitialsAvatarSVG(name, color = '#6366f1') {
-  const initials = name
-    .split(' ')
-    .map(n => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'C';
+// --- DYNAMIC SVG GENERATOR (Auto-Wrap, Short Name, Font Size) ---
+function createDynamicAvatarSVG(name, shortName = '', fontSize = 26, color = '#6366f1') {
+  const displayText = (shortName || name).trim();
+  let textElement = '';
+
+  // Intelligently wrap text if it's long and contains spaces
+  if (displayText.length > 7 && displayText.includes(' ')) {
+    const words = displayText.split(' ');
+    const mid = Math.ceil(words.length / 2);
+    const line1 = words.slice(0, mid).join(' ');
+    const line2 = words.slice(mid).join(' ');
+
+    textElement = `
+      <text x="50" y="${50 - (fontSize * 0.4)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${line1}</text>
+      <text x="50" y="${50 + (fontSize * 0.6)}" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${line2}</text>
+    `;
+  } else {
+    textElement = `<text x="50" y="52" dominant-baseline="middle" text-anchor="middle" font-size="${fontSize}" font-family="sans-serif" font-weight="bold" fill="#ffffff">${displayText}</text>`;
+  }
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
     <circle cx="50" cy="50" r="48" fill="${color}" />
-    <text x="50" y="58" font-size="38" font-family="sans-serif" font-weight="bold" fill="#ffffff" text-anchor="middle">${initials}</text>
+    ${textElement}
   </svg>`;
 
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -67,7 +79,7 @@ function initNetworkEngine() {
       shape: 'circularImage',
       borderWidth: 4,
       borderWidthSelected: 6,
-      size: 38,
+      size: 40,
       font: {
         size: 14,
         face: 'Inter, system-ui, sans-serif',
@@ -96,6 +108,17 @@ function initNetworkEngine() {
   network.on('click', handleNodeClick);
   network.on('deselectNode', handleDeselect);
   renderLegend();
+
+  // Wire up Spacing Slider if present
+  const spacingSlider = document.getElementById('input-node-spacing');
+  if (spacingSlider) {
+    spacingSlider.addEventListener('input', (e) => {
+      const spacing = parseInt(e.target.value, 10);
+      if (!isNaN(spacing)) {
+        network.setOptions({ physics: { forceAtlas2Based: { springLength: spacing } } });
+      }
+    });
+  }
 }
 
 // --- NODE CENTERING & HIGHLIGHTING ENGINE ---
@@ -104,16 +127,13 @@ function handleNodeClick(params) {
     const nodeId = params.nodes[0];
     selectedNodeId = nodeId;
 
-    // Dynamic Centering Animation
     network.focus(nodeId, {
       scale: 1.1,
       animation: { duration: 600, easingFunction: 'easeInOutQuad' }
     });
 
-    // Dim Unconnected Subgraph
     highlightConnectedSubGraph(nodeId);
-
-    document.getElementById('btn-clear-selection').classList.remove('hidden');
+    document.getElementById('btn-clear-selection')?.classList.remove('hidden');
     updateInspector(nodeId);
   } else {
     handleDeselect();
@@ -123,7 +143,7 @@ function handleNodeClick(params) {
 function handleDeselect() {
   selectedNodeId = null;
   resetNodeStyles();
-  document.getElementById('btn-clear-selection').classList.add('hidden');
+  document.getElementById('btn-clear-selection')?.classList.add('hidden');
   clearInspector();
 }
 
@@ -155,19 +175,9 @@ function resetNodeStyles() {
 // --- MULTI-MAP MANAGER & PERSISTENCE ---
 function initMapRegistry() {
   const rawRegistry = localStorage.getItem(REGISTRY_KEY);
-  const oldLegacyNodes = localStorage.getItem('char_map_nodes_v1');
-
+  
   if (rawRegistry) {
     mapRegistry = JSON.parse(rawRegistry);
-  } else if (oldLegacyNodes) {
-    const legacyEdges = localStorage.getItem('char_map_edges_v1');
-    const migratedId = 'map_' + Date.now();
-    mapRegistry = [{ id: migratedId, name: 'Les Misérables' }];
-    localStorage.setItem(`char_map_data_${migratedId}`, JSON.stringify({
-      nodes: JSON.parse(oldLegacyNodes),
-      edges: legacyEdges ? JSON.parse(legacyEdges) : []
-    }));
-    localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
   } else {
     const defaultId = 'map_default';
     mapRegistry = [{ id: defaultId, name: 'Les Misérables' }];
@@ -213,9 +223,11 @@ function loadMapData(mapId) {
     edges = parsed.edges || [];
   }
 
+  // Regenerate SVGs dynamically on load to ensure scaling and shortNames apply
   nodes = nodes.map(n => {
-    if (!n.image || n.image === '') {
-      n.image = createInitialsAvatarSVG(n.label);
+    n.fontSize = n.fontSize || 26;
+    if (!n.image || n.image === '' || n.image.includes('data:image/svg+xml')) {
+      n.image = createDynamicAvatarSVG(n.label, n.shortName, n.fontSize, n.color?.border || '#6366f1');
     }
     return n;
   });
@@ -233,11 +245,10 @@ function loadMapData(mapId) {
 
 function saveDataToLocalStorage() {
   if (!activeMapId) return;
-  const currentData = {
+  localStorage.setItem(`char_map_data_${activeMapId}`, JSON.stringify({
     nodes: nodesDataSet.get(),
     edges: edgesDataSet.get()
-  };
-  localStorage.setItem(`char_map_data_${activeMapId}`, JSON.stringify(currentData));
+  }));
   localStorage.setItem(REGISTRY_KEY, JSON.stringify(mapRegistry));
   updateCounters();
 }
@@ -275,7 +286,7 @@ function deleteActiveMap() {
   }
 
   const currentMap = mapRegistry.find(m => m.id === activeMapId);
-  if (confirm(`Are you sure you want to delete "${currentMap.name}" and all its character data?`)) {
+  if (confirm(`Are you sure you want to delete "${currentMap.name}"?`)) {
     localStorage.removeItem(`char_map_data_${activeMapId}`);
     mapRegistry = mapRegistry.filter(m => m.id !== activeMapId);
     activeMapId = mapRegistry[0].id;
@@ -286,8 +297,10 @@ function deleteActiveMap() {
 }
 
 function updateCounters() {
-  document.getElementById('stat-characters').textContent = nodesDataSet.length;
-  document.getElementById('stat-relationships').textContent = edgesDataSet.length;
+  const statChars = document.getElementById('stat-characters');
+  const statRels = document.getElementById('stat-relationships');
+  if (statChars) statChars.textContent = nodesDataSet.length;
+  if (statRels) statRels.textContent = edgesDataSet.length;
 }
 
 // --- INSPECTOR SIDEBAR LOGIC ---
@@ -295,51 +308,59 @@ function updateInspector(nodeId) {
   const char = nodesDataSet.get(nodeId);
   if (!char) return;
 
-  document.getElementById('inspector-empty-state').classList.add('hidden');
-  document.getElementById('inspector-content').classList.remove('hidden');
+  document.getElementById('inspector-empty-state')?.classList.add('hidden');
+  document.getElementById('inspector-content')?.classList.remove('hidden');
 
-  document.getElementById('inspector-avatar').src = char.image || createInitialsAvatarSVG(char.label);
-  document.getElementById('inspector-name').textContent = char.label;
-  document.getElementById('inspector-archetype').textContent = char.title || 'Character';
-  document.getElementById('inspector-description').textContent = char.bio || 'No overview notes available for this character.';
+  const avatarEl = document.getElementById('inspector-avatar');
+  if (avatarEl) avatarEl.src = char.image || createDynamicAvatarSVG(char.label, char.shortName, char.fontSize);
+  
+  const nameEl = document.getElementById('inspector-name');
+  if (nameEl) nameEl.textContent = char.label;
+
+  const roleEl = document.getElementById('inspector-archetype');
+  if (roleEl) roleEl.textContent = char.title || 'Character';
+
+  const descEl = document.getElementById('inspector-description');
+  if (descEl) descEl.textContent = char.bio || 'No overview notes available.';
 
   const connectedEdges = edgesDataSet.get({ filter: e => e.from === nodeId || e.to === nodeId });
   const relListContainer = document.getElementById('inspector-relationships-list');
-  relListContainer.innerHTML = '';
+  
+  if (relListContainer) {
+    relListContainer.innerHTML = '';
+    if (connectedEdges.length === 0) {
+      relListContainer.innerHTML = '<p class="text-xs text-slate-400 italic">No connected relationships yet.</p>';
+    } else {
+      connectedEdges.forEach(edge => {
+        const targetId = edge.from === nodeId ? edge.to : edge.from;
+        const targetChar = nodesDataSet.get(targetId);
+        if (!targetChar) return;
 
-  if (connectedEdges.length === 0) {
-    relListContainer.innerHTML = '<p class="text-xs text-slate-400 italic">No connected relationships yet.</p>';
-  } else {
-    connectedEdges.forEach(edge => {
-      const targetId = edge.from === nodeId ? edge.to : edge.from;
-      const targetChar = nodesDataSet.get(targetId);
-      if (!targetChar) return;
-
-      const relColor = REL_COLORS[edge.type] || '#64748b';
-      const item = document.createElement('div');
-      item.className = 'flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 shadow-2xs text-xs';
-      item.innerHTML = `
-        <div class="flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${relColor}"></span>
-          <span class="font-semibold text-slate-700">${targetChar.label}</span>
-          <span class="text-slate-400">(${edge.label || edge.type})</span>
-        </div>
-        <button class="btn-delete-edge text-slate-300 hover:text-rose-500 transition-colors" data-edge-id="${edge.id}" title="Remove relationship">
-          <i data-lucide="x" class="w-4 h-4"></i>
-        </button>
-      `;
-      relListContainer.appendChild(item);
-    });
-
-    relListContainer.querySelectorAll('.btn-delete-edge').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const edgeId = e.currentTarget.getAttribute('data-edge-id');
-        edgesDataSet.remove(edgeId);
-        saveDataToLocalStorage();
-        updateInspector(nodeId);
-        if (selectedNodeId) highlightConnectedSubGraph(selectedNodeId);
+        const relColor = REL_COLORS[edge.type] || '#64748b';
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 shadow-2xs text-xs';
+        item.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${relColor}"></span>
+            <span class="font-semibold text-slate-700">${targetChar.label}</span>
+            <span class="text-slate-400">(${edge.label || edge.type})</span>
+          </div>
+          <button class="btn-delete-edge text-slate-300 hover:text-rose-500 transition-colors" data-edge-id="${edge.id}" title="Remove relationship">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        `;
+        relListContainer.appendChild(item);
       });
-    });
+
+      relListContainer.querySelectorAll('.btn-delete-edge').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          edgesDataSet.remove(e.currentTarget.getAttribute('data-edge-id'));
+          saveDataToLocalStorage();
+          updateInspector(nodeId);
+          if (selectedNodeId) highlightConnectedSubGraph(selectedNodeId);
+        });
+      });
+    }
   }
 
   populateEditForm(char);
@@ -347,28 +368,38 @@ function updateInspector(nodeId) {
 }
 
 function clearInspector() {
-  document.getElementById('inspector-empty-state').classList.remove('hidden');
-  document.getElementById('inspector-content').classList.add('hidden');
+  document.getElementById('inspector-empty-state')?.classList.remove('hidden');
+  document.getElementById('inspector-content')?.classList.add('hidden');
   resetCharacterForm();
 }
 
 function populateEditForm(char) {
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  
   document.getElementById('form-title').textContent = 'Edit Character';
-  document.getElementById('edit-character-id').value = char.id;
-  document.getElementById('input-char-name').value = char.label;
-  document.getElementById('input-char-role').value = char.title || '';
-  document.getElementById('input-char-avatar').value = char.image.startsWith('data:image') ? '' : char.image;
-  document.getElementById('input-char-bio').value = char.bio || '';
+  setVal('edit-character-id', char.id);
+  setVal('input-char-name', char.label);
+  setVal('input-char-shortname', char.shortName || '');
+  setVal('input-char-fontsize', char.fontSize || 26);
+  setVal('input-char-role', char.title || '');
+  setVal('input-char-bio', char.bio || '');
+  setVal('input-char-avatar', char.image.startsWith('data:image/svg') ? '' : char.image); // Hide generated SVGs from URL field
+
   document.getElementById('btn-save-character').textContent = 'Update Character';
-  document.getElementById('btn-delete-character').classList.remove('hidden');
+  document.getElementById('btn-delete-character')?.classList.remove('hidden');
 }
 
 function resetCharacterForm() {
   document.getElementById('form-title').textContent = 'Add New Character';
   document.getElementById('edit-character-id').value = '';
-  document.getElementById('form-character').reset();
+  document.getElementById('form-character')?.reset();
+  
+  // Set defaults
+  const fontSizeInput = document.getElementById('input-char-fontsize');
+  if (fontSizeInput) fontSizeInput.value = 26;
+
   document.getElementById('btn-save-character').textContent = 'Save Character';
-  document.getElementById('btn-delete-character').classList.add('hidden');
+  document.getElementById('btn-delete-character')?.classList.add('hidden');
 }
 
 function updateTargetDropdown() {
@@ -393,92 +424,79 @@ function renderLegend() {
 
   Object.entries(REL_COLORS).forEach(([type, color]) => {
     const item = document.createElement('div');
-    item.className = 'flex items-center gap-2.5';
-    item.innerHTML = `
-      <span class="w-3 h-3 rounded-full shrink-0 shadow-2xs" style="background-color: ${color}"></span>
-      <span>${type}</span>
-    `;
+    item.className = 'flex items-center gap-2.5 text-sm';
+    item.innerHTML = `<span class="w-3 h-3 rounded-full shrink-0 shadow-2xs" style="background-color: ${color}"></span><span>${type}</span>`;
     legendContainer.appendChild(item);
   });
 }
 
-// --- IMPORT PARSER ENGINE ---
-function processImportedJSON(parsed) {
-  let characters = parsed.characters || parsed.nodes || [];
-  let relationships = parsed.relationships || parsed.edges || [];
-
-  if (!Array.isArray(characters) || !Array.isArray(relationships)) {
-    alert('Invalid JSON structure. The JSON must contain "characters" and "relationships" arrays.');
-    return false;
-  }
-
-  // Update map title if mapName is provided in JSON
-  if (parsed.mapName && parsed.mapName.trim() !== '') {
-    const currentMap = mapRegistry.find(m => m.id === activeMapId);
-    if (currentMap) {
-      currentMap.name = parsed.mapName.trim();
-      renderMapDropdown();
-    }
-  }
-
-  nodesDataSet.clear();
-  edgesDataSet.clear();
-  nodesDataSet.add(characters);
-  edgesDataSet.add(relationships);
-
-  saveDataToLocalStorage();
-  updateTargetDropdown();
-  handleDeselect();
-  if (network) network.fit({ animation: { duration: 500 } });
-  return true;
+// --- DRAG, DROP & FILE READER ENGINE (Base64 conversion) ---
+function processFileToBase64(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    const urlInput = document.getElementById('input-char-avatar');
+    if (urlInput) urlInput.value = evt.target.result; // Store Base64 directly into the URL input
+  };
+  reader.readAsDataURL(file);
 }
 
 // --- EVENT LISTENERS & BINDINGS ---
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. Initialize Canvas & Multi-Map Data Registry
   initNetworkEngine();
   initMapRegistry();
 
-  // 2. Map Switcher Event Controls
-  document.getElementById('select-active-map')?.addEventListener('change', (e) => {
-    loadMapData(e.target.value);
-  });
+  // Map Switcher & View Controls
+  document.getElementById('select-active-map')?.addEventListener('change', (e) => loadMapData(e.target.value));
   document.getElementById('btn-new-map')?.addEventListener('click', createNewMap);
   document.getElementById('btn-rename-map')?.addEventListener('click', renameActiveMap);
   document.getElementById('btn-delete-map')?.addEventListener('click', deleteActiveMap);
 
-  // 3. Zoom / Reset View Controls
-  document.getElementById('btn-zoom-in')?.addEventListener('click', () => {
-    network?.moveTo({ scale: network.getScale() * 1.25, animation: { duration: 300 } });
-  });
-  document.getElementById('btn-zoom-out')?.addEventListener('click', () => {
-    network?.moveTo({ scale: network.getScale() / 1.25, animation: { duration: 300 } });
-  });
-  document.getElementById('btn-reset-view')?.addEventListener('click', () => {
-    network?.fit({ animation: { duration: 500 } });
-  });
-  document.getElementById('btn-clear-selection')?.addEventListener('click', () => {
-    network?.unselectAll();
-    handleDeselect();
-  });
+  document.getElementById('btn-zoom-in')?.addEventListener('click', () => network?.moveTo({ scale: network.getScale() * 1.25 }));
+  document.getElementById('btn-zoom-out')?.addEventListener('click', () => network?.moveTo({ scale: network.getScale() / 1.25 }));
+  document.getElementById('btn-reset-view')?.addEventListener('click', () => network?.fit({ animation: { duration: 500 } }));
+  document.getElementById('btn-clear-selection')?.addEventListener('click', () => { network?.unselectAll(); handleDeselect(); });
 
-  // 4. Character Form Submission
+  // Drag & Drop / Image File Input
+  const fileInput = document.getElementById('input-char-image-file');
+  const dropZone = document.getElementById('dropzone-avatar');
+
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) processFileToBase64(e.target.files[0]);
+    });
+  }
+
+  if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-indigo-400', 'bg-indigo-50'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-indigo-400', 'bg-indigo-50'));
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-indigo-400', 'bg-indigo-50');
+      if (e.dataTransfer.files.length > 0) processFileToBase64(e.dataTransfer.files[0]);
+    });
+  }
+
+  // Character Form Submission (Includes SVG Auto-Wrap Logic)
   document.getElementById('form-character')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const editId = document.getElementById('edit-character-id').value;
     const name = document.getElementById('input-char-name').value.trim();
+    const shortName = document.getElementById('input-char-shortname')?.value.trim() || '';
+    const fontSize = parseInt(document.getElementById('input-char-fontsize')?.value) || 26;
     const role = document.getElementById('input-char-role').value.trim();
     const avatarUrl = document.getElementById('input-char-avatar').value.trim();
     const bio = document.getElementById('input-char-bio').value.trim();
 
-    const imageSrc = avatarUrl !== '' ? avatarUrl : createInitialsAvatarSVG(name);
+    // Determine if we use uploaded/URL image or generate a dynamic SVG
+    const isImageAvailable = avatarUrl !== '' && !avatarUrl.startsWith('data:image/svg');
+    const imageSrc = isImageAvailable ? avatarUrl : createDynamicAvatarSVG(name, shortName, fontSize);
 
     if (editId) {
-      nodesDataSet.update({ id: editId, label: name, title: role, bio: bio, image: imageSrc });
+      nodesDataSet.update({ id: editId, label: name, shortName, fontSize, title: role, bio: bio, image: imageSrc });
       if (selectedNodeId === editId) updateInspector(editId);
     } else {
-      const newId = String(Date.now());
-      nodesDataSet.add({ id: newId, label: name, title: role, bio: bio, shape: 'circularImage', image: imageSrc, color: { border: '#6366f1' } });
+      nodesDataSet.add({ id: String(Date.now()), label: name, shortName, fontSize, title: role, bio: bio, shape: 'circularImage', image: imageSrc, color: { border: '#6366f1' } });
     }
 
     saveDataToLocalStorage();
@@ -486,14 +504,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!editId) resetCharacterForm();
   });
 
-  // 5. Delete Character Button
+  // Delete Character
   document.getElementById('btn-delete-character')?.addEventListener('click', () => {
     const editId = document.getElementById('edit-character-id').value;
     if (!editId) return;
 
-    if (confirm('Are you sure you want to delete this character and all connected relationships?')) {
-      const connectedEdges = edgesDataSet.get({ filter: e => e.from === editId || e.to === editId });
-      connectedEdges.forEach(e => edgesDataSet.remove(e.id));
+    if (confirm('Delete this character and all connected relationships?')) {
+      edgesDataSet.get({ filter: e => e.from === editId || e.to === editId }).forEach(e => edgesDataSet.remove(e.id));
       nodesDataSet.remove(editId);
       saveDataToLocalStorage();
       handleDeselect();
@@ -501,32 +518,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 6. Form Mode Toggle
   document.getElementById('btn-mode-toggle')?.addEventListener('click', resetCharacterForm);
 
-  // 7. Relationship Link Form
+  // Relationship Form
   document.getElementById('form-relationship')?.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (!selectedNodeId) {
-      alert('Please select a primary character from the map view first.');
-      return;
-    }
+    if (!selectedNodeId) return alert('Select a primary character first.');
 
     const targetId = document.getElementById('select-target-character').value;
     const relType = document.getElementById('select-rel-type').value;
     const customLabel = document.getElementById('input-rel-label').value.trim();
 
-    if (!targetId) {
-      alert('Please choose a target character to connect.');
-      return;
-    }
+    if (!targetId) return alert('Choose a target character.');
 
     const colorHex = REL_COLORS[relType] || '#64748b';
     const displayLabel = customLabel !== '' ? customLabel : relType;
 
-    const existingEdges = edgesDataSet.get({
-      filter: e => (e.from === selectedNodeId && e.to === targetId) || (e.from === targetId && e.to === selectedNodeId)
-    });
+    const existingEdges = edgesDataSet.get({ filter: e => (e.from === selectedNodeId && e.to === targetId) || (e.from === targetId && e.to === selectedNodeId) });
 
     if (existingEdges.length > 0) {
       edgesDataSet.update({ id: existingEdges[0].id, label: displayLabel, type: relType, color: { color: colorHex } });
@@ -540,78 +548,16 @@ document.addEventListener('DOMContentLoaded', () => {
     e.target.reset();
   });
 
-  // 8. JSON Export (Active Map)
+  // JSON Import/Export Logic
   document.getElementById('btn-export-json')?.addEventListener('click', () => {
     const currentMap = mapRegistry.find(m => m.id === activeMapId);
-    const data = {
-      mapName: currentMap ? currentMap.name : 'Character Map',
-      characters: nodesDataSet.get(),
-      relationships: edgesDataSet.get()
-    };
-
-    const jsonStr = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ mapName: currentMap?.name || 'Map', characters: nodesDataSet.get(), relationships: edgesDataSet.get() }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const safeName = (currentMap ? currentMap.name : 'map').toLowerCase().replace(/[^a-z0-9]/g, '_');
-    a.download = `${safeName}_backup.json`;
+    a.download = `${(currentMap?.name || 'map').toLowerCase().replace(/[^a-z0-9]/g, '_')}_backup.json`;
     a.click();
     URL.revokeObjectURL(url);
-  });
-
-  // 9. Modal Control Events
-  const importModal = document.getElementById('modal-import-json');
-  const importTextarea = document.getElementById('textarea-import-json');
-
-  const openModal = () => {
-    if (importTextarea) importTextarea.value = '';
-    importModal?.classList.remove('hidden');
-  };
-
-  const closeModal = () => {
-    importModal?.classList.add('hidden');
-  };
-
-  document.getElementById('btn-open-import-modal')?.addEventListener('click', openModal);
-  document.getElementById('btn-close-import-modal')?.addEventListener('click', closeModal);
-  document.getElementById('btn-cancel-import')?.addEventListener('click', closeModal);
-
-  // 10. Submit Pasted JSON
-  document.getElementById('btn-submit-import-json')?.addEventListener('click', () => {
-    const rawText = importTextarea?.value.trim();
-    if (!rawText) {
-      alert('Please paste valid JSON text into the box.');
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(rawText);
-      if (processImportedJSON(parsed)) {
-        closeModal();
-      }
-    } catch (err) {
-      alert('Invalid JSON formatting. Please double-check your code.');
-    }
-  });
-
-  // 11. Modal File Input Option
-  document.getElementById('input-import-json-file')?.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const parsed = JSON.parse(evt.target.result);
-        if (processImportedJSON(parsed)) {
-          closeModal();
-        }
-      } catch (err) {
-        alert('Error parsing JSON file.');
-      }
-    };
-    reader.readAsText(file);
   });
 
   if (window.lucide) lucide.createIcons();
