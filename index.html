@@ -266,5 +266,32 @@
 
   <!-- Load Main Logic -->
   <script src="app.js"></script>
+  // --- ADDITIVE FIX FOR IMPORT JSON ---
+document.addEventListener('DOMContentLoaded', () => {
+    const importBtn = document.getElementById('open-import-modal-btn');
+    if (importBtn && !importBtn.hasAttribute('data-import-bound')) {
+        importBtn.setAttribute('data-import-bound', 'true');
+        importBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const jsonStr = prompt("Paste your JSON data structure below (nodes & edges):");
+            if (jsonStr) {
+                try {
+                    const parsedData = JSON.parse(jsonStr);
+                    if (parsedData.nodes && parsedData.edges && typeof nodes !== 'undefined' && typeof edges !== 'undefined') {
+                        nodes.clear();
+                        edges.clear();
+                        nodes.add(parsedData.nodes);
+                        edges.add(parsedData.edges);
+                        alert("Network data imported successfully!");
+                    } else {
+                        alert("Import failed: JSON must contain both 'nodes' and 'edges' arrays.");
+                    }
+                } catch (err) {
+                    alert("Invalid JSON: " + err.message);
+                }
+            }
+        });
+    }
+});
 </body>
 </html>
