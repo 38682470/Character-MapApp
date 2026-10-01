@@ -3,414 +3,268 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Roots Character Map</title>
+  <title>Dynamic Character Network Map</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vis-Network CDN -->
   <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { display: flex; flex-direction: column; height: 100vh; background-color: #f8fafc; color: #0f172a; }
-    
-    header {
-      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
-      padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; gap: 12px;
-    }
-    .title { font-size: 1.2rem; font-weight: 700; color: #1e293b; }
-    
-    .controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-    .slider-group { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 600; color: #475569; }
-    .slider-group input[type="range"] { width: 140px; cursor: pointer; }
-    
-    .btn {
-      padding: 6px 14px; font-size: 0.875rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer;
-      background-color: #0284c7; color: white; transition: background 0.2s;
-    }
-    .btn:hover { background-color: #0369a1; }
-    .btn-secondary { background-color: #64748b; }
-    .btn-secondary:hover { background-color: #475569; }
-    
-    #app-container { display: flex; flex: 1; overflow: hidden; position: relative; }
-    #network { flex: 1; height: 100%; background-color: #ffffff; }
-    
-    /* Modal Styles */
-    .modal-overlay {
-      display: none; position: absolute; top:0; left:0; width:100%; height:100%;
-      background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px); z-index: 100;
-      justify-content: center; align-items: center;
-    }
-    .modal {
-      background: #ffffff; width: 420px; max-width: 90%; padding: 20px; border-radius: 12px;
-      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 14px;
-    }
-    .modal h3 { font-size: 1.1rem; color: #0f172a; }
-    .form-group { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; font-weight: 600; color: #334155; }
-    .form-group input, .form-group textarea {
-      padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;
-    }
-    .form-row { display: flex; gap: 10px; }
-    .form-row .form-group { flex: 1; }
-    
-    /* Drag & Drop Zone */
-    .drop-zone {
-      border: 2px dashed #0284c7; border-radius: 6px; padding: 12px; text-align: center;
-      background-color: #f0f9ff; color: #0369a1; cursor: pointer; transition: background 0.2s;
-      font-size: 0.8rem; font-weight: 500;
-    }
-    .drop-zone.dragover { background-color: #e0f2fe; border-color: #0369a1; }
-    
-    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
-  </style>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="bg-slate-100 font-sans text-slate-800 antialiased h-screen overflow-hidden">
 
-  <header>
-    <div class="title">Roots Character Map</div>
-    <div class="controls">
-      <div class="slider-group">
-        <label for="lineLengthSlider">Line Spacing:</label>
-        <input type="range" id="lineLengthSlider" min="100" max="450" value="225">
-        <span id="sliderVal">225px</span>
+  <!-- Main Container -->
+  <div class="flex h-full w-full">
+
+    <!-- CANVAS VIEW (Left ~70%) -->
+    <div class="relative flex-1 h-full bg-slate-50 border-r border-slate-200">
+      
+      <!-- Top Canvas Header Bar with Multi-Map Book Switcher -->
+      <div class="absolute top-4 left-4 z-10 flex items-center gap-3 bg-white/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-sm border border-slate-200/80 max-w-[calc(100%-120px)] flex-wrap">
+        
+        <!-- Book / Map Selector Controls -->
+        <div class="flex items-center gap-1.5 border-r border-slate-200 pr-3">
+          <i data-lucide="book-open" class="w-4 h-4 text-indigo-600"></i>
+          <select id="select-active-map" class="text-xs font-bold text-slate-800 bg-transparent border-none outline-hidden cursor-pointer pr-1 hover:text-indigo-600 transition-colors">
+            <!-- Dynamically Populated Maps -->
+          </select>
+          <button id="btn-new-map" title="Create New Book Map" class="p-1 hover:bg-slate-100 rounded-md text-slate-600 transition-colors">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          </button>
+          <button id="btn-rename-map" title="Rename Active Map" class="p-1 hover:bg-slate-100 rounded-md text-slate-600 transition-colors">
+            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+          </button>
+          <button id="btn-delete-map" title="Delete Active Map" class="p-1 hover:bg-slate-100 hover:text-rose-600 rounded-md text-slate-400 transition-colors">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <!-- NEW: Line Spacing Slider -->
+        <div class="flex items-center gap-2 border-r border-slate-200 pr-3">
+            <i data-lucide="scaling" class="w-4 h-4 text-slate-500" title="Adjust Node Spacing"></i>
+            <input type="range" id="slider-line-spacing" min="100" max="800" value="300" class="w-24 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer">
+        </div>
+
+        <div class="text-xs font-semibold text-slate-600">
+          <span id="stat-characters">0</span> characters, <span id="stat-relationships">0</span> relationships
+        </div>
+        <button id="btn-clear-selection" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-300 font-medium transition-colors hidden">
+          Clear selection
+        </button>
       </div>
-      <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">Import JSON</button>
-      <input type="file" id="fileInput" accept=".json" style="display:none" onchange="importJSON(event)">
-      <button class="btn btn-secondary" onclick="exportJSON()">Export JSON</button>
+
+      <!-- Top Right Control Panel -->
+      <div class="absolute top-4 right-4 z-10 flex flex-col gap-1.5 bg-white/90 backdrop-blur-md p-1.5 rounded-xl shadow-sm border border-slate-200/80">
+        <button id="btn-zoom-in" title="Zoom In" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
+          <i data-lucide="zoom-in" class="w-5 h-5"></i>
+        </button>
+        <button id="btn-zoom-out" title="Zoom Out" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors">
+          <i data-lucide="zoom-out" class="w-5 h-5"></i>
+        </button>
+        <button id="btn-reset-view" title="Reset View" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors border-t border-slate-100">
+          <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Vis-Network Interactive Canvas Container -->
+      <div id="character-network" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+      <!-- Bottom Left Floating Relationship Legend -->
+      <div class="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-md border border-slate-200/80 w-60">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">Relationship Types</h4>
+        <div id="legend-list" class="space-y-2 text-xs font-medium text-slate-600">
+          <!-- Dynamic Legend Items Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Bottom Right Data Backup Tools -->
+      <div class="absolute bottom-4 right-4 z-10 flex items-center gap-2 bg-white/90 backdrop-blur-md p-2 rounded-xl shadow-sm border border-slate-200/80">
+        <button id="btn-export-json" class="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
+        </button>
+        <button id="btn-open-import-modal" class="flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import JSON
+        </button>
+      </div>
     </div>
-  </header>
 
-  <div id="app-container">
-    <div id="network"></div>
+    <!-- SIDEBAR INSPECTOR & EDITOR (Right ~30%) -->
+    <div class="w-[420px] h-full bg-white flex flex-col border-l border-slate-200 shadow-lg z-20">
+      
+      <!-- Upper Section: Character Inspector -->
+      <div class="p-6 border-b border-slate-200 overflow-y-auto max-h-[50%] bg-slate-50/50">
+        <div id="inspector-empty-state" class="py-12 text-center text-slate-400">
+          <i data-lucide="user-search" class="w-12 h-12 mx-auto mb-3 stroke-1 text-slate-300"></i>
+          <p class="text-sm font-medium">Select a character from the map to view details.</p>
+        </div>
 
-    <!-- Edit Character Modal -->
-    <div class="modal-overlay" id="editModal">
-      <div class="modal">
-        <h3 id="modalTitle">Edit Character</h3>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Full Name</label>
-            <input type="text" id="editLabel">
+        <div id="inspector-content" class="hidden space-y-4">
+          <!-- Header info -->
+          <div class="flex items-start gap-4">
+            <img id="inspector-avatar" src="" alt="Avatar" class="w-16 h-16 rounded-full object-cover border-2 border-indigo-500 shadow-sm bg-slate-200">
+            <div>
+              <h2 id="inspector-name" class="text-xl font-bold text-slate-800 leading-tight"></h2>
+              <span id="inspector-archetype" class="inline-block mt-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100"></span>
+            </div>
           </div>
-          <div class="form-group" style="width: 80px; flex: none;">
-            <label>Initials</label>
-            <input type="text" id="editInitials" maxlength="3">
+
+          <!-- Description / Bio -->
+          <div>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Character Overview</h4>
+            <p id="inspector-description" class="text-sm text-slate-600 leading-relaxed bg-white p-3 rounded-lg border border-slate-200 shadow-2xs"></p>
+          </div>
+
+          <!-- Relationships Breakdown -->
+          <div>
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Connected Relationships</h4>
+            <div id="inspector-relationships-list" class="space-y-2">
+              <!-- Dynamically populated links -->
+            </div>
           </div>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Title / Role</label>
-            <input type="text" id="editTitle">
+      </div>
+
+      <!-- Lower Section: Form Drawer -->
+      <div class="flex-1 p-6 overflow-y-auto bg-white space-y-6">
+        
+        <!-- Form Header Toggle -->
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 id="form-title" class="text-base font-bold text-slate-800">Add New Character</h3>
+          <button id="btn-mode-toggle" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold underline">
+            Reset to New Form
+          </button>
+        </div>
+
+        <!-- Character Details Form -->
+        <form id="form-character" class="space-y-3">
+          <input type="hidden" id="edit-character-id">
+          
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Character Name (Full)</label>
+            <input type="text" id="input-char-name" required placeholder="e.g., Jean Valjean" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
           </div>
-          <div class="form-group" style="width: 100px; flex: none;">
-            <label>Font Size (px)</label>
-            <input type="number" id="editFontSize" min="8" max="20" value="11">
+
+          <!-- NEW: Short Name & Font Size -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">In-Circle Name (Optional)</label>
+              <input type="text" id="input-char-shortname" placeholder="e.g., Valjean" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Node Font Size (px)</label>
+              <input type="number" id="input-char-fontsize" value="14" min="8" max="36" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+            </div>
           </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Archetype / Role Tag</label>
+            <input type="text" id="input-char-role" placeholder="e.g., Protagonist" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+          </div>
+
+          <!-- NEW: Drag & Drop Avatar Zone replacing basic URL input -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Avatar Image</label>
+            <div id="avatar-dropzone" class="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 hover:border-indigo-400 transition-colors cursor-pointer flex flex-col items-center justify-center gap-2 group relative">
+                <i data-lucide="image-plus" class="w-6 h-6 text-slate-400 group-hover:text-indigo-500 transition-colors"></i>
+                <div class="text-xs text-slate-500 font-medium">
+                    <span class="text-indigo-600">Click to browse</span> or drag image here
+                </div>
+                <div class="text-[10px] text-slate-400">or paste a URL below</div>
+                <!-- Hidden file input -->
+                <input type="file" id="input-char-avatar-file" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            </div>
+            <input type="url" id="input-char-avatar" placeholder="https://... or auto-filled Base64" class="w-full text-xs px-3 py-2 mt-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-400">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Overview / Bio Notes</label>
+            <textarea id="input-char-bio" rows="3" placeholder="Enter notes or character background..." class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"></textarea>
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <button type="submit" id="btn-save-character" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm py-2 rounded-lg transition-colors shadow-xs">
+              Save Character
+            </button>
+            <button type="button" id="btn-delete-character" class="hidden bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-medium text-sm px-3 py-2 rounded-lg transition-colors">
+              Delete
+            </button>
+          </div>
+        </form>
+
+        <hr class="border-slate-100">
+
+        <!-- Relationship Link Form -->
+        <div class="space-y-3">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">Manage Relationship Link</h4>
+          <form id="form-relationship" class="space-y-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Target Connected Character</label>
+              <select id="select-target-character" required class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                <option value="">-- Select Target --</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Relationship Type</label>
+                <select id="select-rel-type" required class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                  <option value="Ally/Friend">Ally/Friend</option>
+                  <option value="Authority/Power">Authority/Power</option>
+                  <option value="Family">Family</option>
+                  <option value="Rival/Enemy">Rival/Enemy</option>
+                  <option value="Romantic">Romantic</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Custom Label (Optional)</label>
+                <input type="text" id="input-rel-label" placeholder="e.g., Foster Father" class="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+              </div>
+            </div>
+
+            <button type="submit" id="btn-save-relationship" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium text-sm py-2 rounded-lg transition-colors shadow-xs">
+              Link Relationships
+            </button>
+          </form>
         </div>
-        <div class="form-group">
-          <label>Bio Summary</label>
-          <textarea id="editBio" rows="2"></textarea>
-        </div>
-        <div class="form-group">
-          <label>Border Color</label>
-          <input type="color" id="editColor" style="height:36px; padding:2px; cursor:pointer;">
-        </div>
-        <div class="form-group">
-          <label>Character Photo</label>
-          <div class="drop-zone" id="dropZone">Drag & Drop Image Here or Click to Browse</div>
-          <input type="file" id="imageFileInput" accept="image/*" style="display:none">
-          <input type="text" id="editImage" placeholder="Or enter Image URL / Data URI" style="margin-top:4px;">
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          <button class="btn" onclick="saveCharacter()">Save</button>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- JSON Copy-Paste Import Modal -->
+  <div id="modal-import-json" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl shadow-xl border border-slate-200 w-[550px] max-w-[90vw] p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-base font-bold text-slate-800">Import Character Map JSON</h3>
+        <button id="btn-close-import-modal" class="text-slate-400 hover:text-slate-600 transition-colors">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Paste JSON Code Below:</label>
+        <textarea id="textarea-import-json" rows="10" placeholder="Paste your generated JSON here..." class="w-full text-xs font-mono p-3 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none"></textarea>
+      </div>
+      <div class="flex items-center justify-between gap-3 pt-2">
+        <label class="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer">
+          <i data-lucide="file-up" class="w-3.5 h-3.5"></i> Or choose a .json file
+          <input type="file" id="input-import-json-file" accept=".json" class="hidden">
+        </label>
+        <div class="flex items-center gap-2">
+          <button id="btn-cancel-import" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+            Cancel
+          </button>
+          <button id="btn-submit-import-json" class="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-xs">
+            Import Data
+          </button>
         </div>
       </div>
     </div>
   </div>
 
-  <script>
-    let network = null;
-    let nodesDataSet = new vis.DataSet([]);
-    let edgesDataSet = new vis.DataSet([]);
-    let selectedNodeId = null;
-
-    const initialData = {
-      "characters": [
-        { "id": "1", "label": "Omoro Kinte", "initials": "OK", "fontSize": 11, "title": "Patriarch (Juffure)", "bio": "Mandinka elder in Juffure, Gambia; father of Kunta Kinte.", "color": "#0284c7" },
-        { "id": "2", "label": "Binta Kinte", "initials": "BK", "fontSize": 11, "title": "Matriarch (Juffure)", "bio": "Mother of Kunta Kinte; wife of Omoro in Juffure.", "color": "#0284c7" },
-        { "id": "3", "label": "Kunta Kinte (\"Toby\")", "initials": "KK", "fontSize": 10, "title": "1st Gen / Protagonist", "bio": "Captured in Gambia and brought to Virginia; preserved his heritage.", "color": "#6366f1" },
-        { "id": "4", "label": "John Waller", "initials": "JW", "fontSize": 11, "title": "First Plantation Owner", "bio": "Purchased Kunta Kinte upon arrival in Virginia.", "color": "#f97316" },
-        { "id": "5", "label": "Dr. William Waller", "initials": "WW", "fontSize": 10, "title": "Physician / Second Owner", "bio": "Brother of John Waller; employed Kunta as carriage driver.", "color": "#f97316" },
-        { "id": "6", "label": "Bell Waller", "initials": "BW", "fontSize": 11, "title": "Plantation Cook / Wife", "bio": "Cook on Dr. Waller's plantation; married Kunta Kinte.", "color": "#0284c7" },
-        { "id": "7", "label": "Missy Ann", "initials": "MA", "fontSize": 11, "title": "Planter's Daughter", "bio": "Niece of Dr. Waller; taught Kizzy to read and write.", "color": "#84cc16" },
-        { "id": "8", "label": "Kizzy Kinte", "initials": "KZ", "fontSize": 11, "title": "2nd Gen Ancestor", "bio": "Daughter of Kunta and Bell; sold to Tom Lea.", "color": "#6366f1" },
-        { "id": "9", "label": "Tom Lea", "initials": "TL", "fontSize": 11, "title": "NC Plantation Owner", "bio": "Owner of the Lea plantation; father of Chicken George.", "color": "#ef4444" },
-        { "id": "10", "label": "George Lea (\"Chicken George\")", "initials": "CG", "fontSize": 9, "title": "3rd Gen / Gamefowl Trainer", "bio": "Master gamefowl trainer who bought family's freedom.", "color": "#6366f1" },
-        { "id": "11", "label": "Matilda", "initials": "MT", "fontSize": 11, "title": "Matriarch / Wife of George", "bio": "Devout wife of Chicken George.", "color": "#0284c7" },
-        { "id": "12", "label": "Tom Murray", "initials": "TM", "fontSize": 11, "title": "4th Gen / Blacksmith", "bio": "Skilled master blacksmith post-Emancipation.", "color": "#6366f1" },
-        { "id": "13", "label": "Irene", "initials": "IR", "fontSize": 11, "title": "Wife of Tom Murray", "bio": "Wife of Tom Murray; mother of Cynthia.", "color": "#0284c7" },
-        { "id": "14", "label": "Cynthia Murray", "initials": "CM", "fontSize": 10, "title": "5th Gen / Family Historian", "bio": "Passed down oral lineage to Alex Haley.", "color": "#6366f1" },
-        { "id": "15", "label": "Will Palmer", "initials": "WP", "fontSize": 11, "title": "Lumber Mill Owner", "bio": "Owner of Henning Lumber Company.", "color": "#0284c7" },
-        { "id": "16", "label": "Bertha Palmer", "initials": "BP", "fontSize": 11, "title": "6th Gen / Educator", "bio": "College graduate and mother of Alex Haley.", "color": "#6366f1" },
-        { "id": "17", "label": "Simon Alexander Haley", "initials": "SH", "fontSize": 9, "title": "Professor / Father", "bio": "Agriculture professor; father of Alex Haley.", "color": "#0284c7" },
-        { "id": "18", "label": "Alex Haley", "initials": "AH", "fontSize": 11, "title": "7th Gen / Author", "bio": "Author of Roots.", "color": "#6366f1" }
-      ],
-      "relationships": [
-        { "id": "e1", "from": "1", "to": "2", "label": "Married" },
-        { "id": "e2", "from": "1", "to": "3", "label": "Father & Son" },
-        { "id": "e3", "from": "2", "to": "3", "label": "Mother & Son" },
-        { "id": "e4", "from": "4", "to": "3", "label": "First Enslaver" },
-        { "id": "e5", "from": "5", "to": "4", "label": "Brothers" },
-        { "id": "e6", "from": "5", "to": "3", "label": "Owner & Physician" },
-        { "id": "e7", "from": "3", "to": "6", "label": "Husband & Wife" },
-        { "id": "e8", "from": "3", "to": "8", "label": "Father & Daughter" },
-        { "id": "e9", "from": "6", "to": "8", "label": "Mother & Daughter" },
-        { "id": "e10", "from": "7", "to": "8", "label": "Playmates / Companion" },
-        { "id": "e11", "from": "9", "to": "8", "label": "Enslaver" },
-        { "id": "e12", "from": "9", "to": "10", "label": "Biological Father / Master" },
-        { "id": "e13", "from": "8", "to": "10", "label": "Mother & Son" },
-        { "id": "e14", "from": "10", "to": "11", "label": "Husband & Wife" },
-        { "id": "e15", "from": "10", "to": "12", "label": "Father & Son" },
-        { "id": "e16", "from": "11", "to": "12", "label": "Mother & Son" },
-        { "id": "e17", "from": "12", "to": "13", "label": "Husband & Wife" },
-        { "id": "e18", "from": "12", "to": "14", "label": "Father & Daughter" },
-        { "id": "e19", "from": "13", "to": "14", "label": "Mother & Daughter" },
-        { "id": "e20", "from": "14", "to": "15", "label": "Husband & Wife" },
-        { "id": "e21", "from": "14", "to": "16", "label": "Mother & Daughter" },
-        { "id": "e22", "from": "15", "to": "16", "label": "Father & Daughter" },
-        { "id": "e23", "from": "16", "to": "17", "label": "Husband & Wife" },
-        { "id": "e24", "from": "16", "to": "18", "label": "Mother & Son" },
-        { "id": "e25", "from": "17", "to": "18", "label": "Father & Son" },
-        { "id": "e26", "from": "14", "to": "18", "label": "Grandmother / Oral Tradition" }
-      ]
-    };
-
-    // Helper: Generate clean SVG graphic containing color, image, initials, and lower-third name
-    function createNodeSvg(label, initials, fontSize, colorHex, imgSrc) {
-      const size = 120;
-      const radius = 54;
-      const center = 60;
-      const strokeColor = colorHex || '#0284c7';
-      const safeInitials = initials || (label ? label.split(' ').map(n=>n[0]).join('').substring(0,2) : '');
-      const safeFontSize = fontSize || 11;
-
-      let imageElement = '';
-      if (imgSrc) {
-        imageElement = `<image href="${imgSrc}" x="6" y="6" width="108" height="108" preserveAspectRatio="xMidYMid slice" clip-path="url(#circleClip)"/>
-        <circle cx="${center}" cy="${center}" r="${radius}" fill="rgba(15, 23, 42, 0.3)"/>`;
-      } else {
-        imageElement = `<circle cx="${center}" cy="${center}" r="${radius}" fill="${strokeColor}"/>`;
-      }
-
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-        <defs>
-          <clipPath id="circleClip">
-            <circle cx="${center}" cy="${center}" r="${radius}"/>
-          </clipPath>
-        </defs>
-        ${imageElement}
-        <text x="${center}" y="${center - 8}" font-family="-apple-system, sans-serif" font-size="${Math.round(safeFontSize * 1.8)}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">${safeInitials}</text>
-        <path d="M 12 78 A 54 54 0 0 0 108 78 Z" fill="rgba(15, 23, 42, 0.75)" clip-path="url(#circleClip)"/>
-        <text x="${center}" y="92" font-family="-apple-system, sans-serif" font-size="${safeFontSize}" font-weight="bold" fill="#ffffff" text-anchor="middle" dominant-baseline="middle">${label}</text>
-        <circle cx="${center}" cy="${center}" r="${radius}" fill="none" stroke="${strokeColor}" stroke-width="5"/>
-      </svg>`;
-
-      return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-    }
-
-    function buildNodeObject(c) {
-      const colorVal = (typeof c.color === 'string') ? c.color : (c.color && c.color.border ? c.color.border : '#0284c7');
-      return {
-        id: c.id,
-        label: "", // Remove floating external label below node
-        shape: 'image',
-        image: createNodeSvg(c.label, c.initials, c.fontSize, colorVal, c.image),
-        size: 50,
-        // Store underlying data properties for modal editing
-        charLabel: c.label,
-        initials: c.initials,
-        fontSize: c.fontSize || 11,
-        title: c.title || '',
-        bio: c.bio || '',
-        colorHex: colorVal,
-        charImage: c.image || ''
-      };
-    }
-
-    function initNetwork(data) {
-      const formattedNodes = data.characters.map(buildNodeObject);
-      const formattedEdges = data.relationships.map(r => ({
-        ...r,
-        font: { size: 11, align: 'middle', background: '#ffffff', strokeWidth: 0 },
-        color: { color: '#94a3b8', highlight: '#0284c7' }
-      }));
-
-      nodesDataSet = new vis.DataSet(formattedNodes);
-      edgesDataSet = new vis.DataSet(formattedEdges);
-
-      const container = document.getElementById('network');
-      const initialSpringLength = parseInt(document.getElementById('lineLengthSlider').value);
-
-      const networkData = { nodes: nodesDataSet, edges: edgesDataSet };
-      const options = {
-        edges: { smooth: { type: 'continuous' } },
-        physics: {
-          solver: 'barnesHut',
-          barnesHut: {
-            springLength: initialSpringLength,
-            springConstant: 0.04,
-            gravitationalConstant: -3000
-          }
-        },
-        interaction: { hover: true, selectConnectedEdges: true }
-      };
-
-      network = new vis.Network(container, networkData, options);
-
-      // Node Double Click Event -> Open Edit Modal
-      network.on("doubleClick", function (params) {
-        if (params.nodes.length > 0) {
-          selectedNodeId = params.nodes[0];
-          openModal(selectedNodeId);
-        }
-      });
-    }
-
-    // Master Slider Line Length Control
-    document.getElementById('lineLengthSlider').addEventListener('input', function (e) {
-      const val = e.target.value;
-      document.getElementById('sliderVal').innerText = val + 'px';
-      if (network) {
-        network.setOptions({
-          physics: {
-            barnesHut: { springLength: parseInt(val) }
-          }
-        });
-      }
-    });
-
-    // Drag and Drop Image Upload Handlers
-    const dropZone = document.getElementById('dropZone');
-    const imageFileInput = document.getElementById('imageFileInput');
-
-    dropZone.addEventListener('click', () => imageFileInput.click());
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropZone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-      }, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropZone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-      }, false);
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-      const files = e.dataTransfer.files;
-      if (files.length > 0) handleImageFile(files[0]);
-    });
-
-    imageFileInput.addEventListener('change', (e) => {
-      if (e.target.files.length > 0) handleImageFile(e.target.files[0]);
-    });
-
-    function handleImageFile(file) {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = function (event) {
-        document.getElementById('editImage').value = event.target.result;
-        dropZone.innerText = "Loaded: " + file.name;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    // Modal Controls
-    function openModal(nodeId) {
-      const node = nodesDataSet.get(nodeId);
-      if (!node) return;
-
-      document.getElementById('editLabel').value = node.charLabel || '';
-      document.getElementById('editInitials').value = node.initials || '';
-      document.getElementById('editTitle').value = node.title || '';
-      document.getElementById('editFontSize').value = node.fontSize || 11;
-      document.getElementById('editBio').value = node.bio || '';
-      document.getElementById('editColor').value = node.colorHex || '#0284c7';
-      document.getElementById('editImage').value = node.charImage || '';
-      dropZone.innerText = "Drag & Drop Image Here or Click to Browse";
-
-      document.getElementById('editModal').style.display = 'flex';
-    }
-
-    function closeModal() {
-      document.getElementById('editModal').style.display = 'none';
-      selectedNodeId = null;
-    }
-
-    function saveCharacter() {
-      if (!selectedNodeId) return;
-
-      const updatedLabel = document.getElementById('editLabel').value;
-      const updatedInitials = document.getElementById('editInitials').value;
-      const updatedTitle = document.getElementById('editTitle').value;
-      const updatedFontSize = parseInt(document.getElementById('editFontSize').value) || 11;
-      const updatedBio = document.getElementById('editBio').value;
-      const updatedColor = document.getElementById('editColor').value;
-      const updatedImage = document.getElementById('editImage').value;
-
-      const updatedSvg = createNodeSvg(updatedLabel, updatedInitials, updatedFontSize, updatedColor, updatedImage);
-
-      nodesDataSet.update({
-        id: selectedNodeId,
-        image: updatedSvg,
-        charLabel: updatedLabel,
-        initials: updatedInitials,
-        title: updatedTitle,
-        fontSize: updatedFontSize,
-        bio: updatedBio,
-        colorHex: updatedColor,
-        charImage: updatedImage
-      });
-
-      closeModal();
-    }
-
-    // Export / Import
-    function exportJSON() {
-      const nodes = nodesDataSet.get().map(n => ({
-        id: n.id, label: n.charLabel, initials: n.initials, fontSize: n.fontSize,
-        title: n.title, bio: n.bio, color: n.colorHex, image: n.charImage
-      }));
-      const edges = edgesDataSet.get().map(e => ({
-        id: e.id, from: e.from, to: e.to, label: e.label
-      }));
-
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ mapName: "Roots Character Map", characters: nodes, relationships: edges }, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", "Roots_Character_Map.json");
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-    }
-
-    function importJSON(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        try {
-          const imported = JSON.parse(e.target.result);
-          if (imported.characters && imported.relationships) {
-            initNetwork(imported);
-          }
-        } catch (err) {
-          alert("Invalid JSON file format.");
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    window.onload = () => initNetwork(initialData);
-  </script>
+  <!-- Load Main Logic -->
+  <script src="app.js"></script>
 </body>
 </html>
